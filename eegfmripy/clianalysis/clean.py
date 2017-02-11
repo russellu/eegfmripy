@@ -1,8 +1,11 @@
 import mne
+import logging
 
 from ..cli import AnalysisParser
-from ..run_bcg_denoise import remove_bcg
-from ..remove_gradient_single import remove_gradient
+from ..clianalysis.run_bcg_denoise import remove_bcg
+from ..clianalysis.remove_gradient_single import remove_gradient
+
+log = logging.getLogger("eegfmripy")
 
 
 def run(args=None, config=None):
@@ -12,7 +15,7 @@ def run(args=None, config=None):
         config = args.config
 
     montage_path = config['montage_path']
-    gradrem_path = config['raw_vhdr']
+    data_path = config['raw_vhdr']
     output = config['output']
     display_ica_components = config['display_ica_components']
     alignment_trigger_name = config['alignment_trigger_name']
@@ -29,12 +32,28 @@ def run(args=None, config=None):
     if 'bcg_peak_widths' in config:
         bcg_peak_widths = config['bcg_peak_widths']
 
-    raw = mne.io.read_raw_fif(gradrem_path)
+    log.info("Reading data...")
+
+    if not data_path:
+        raise Exception("Required data path 'raw_vhdr' not supplied.")
+    if data_path.endswith('.fif'):
+        raw = mne.io.read_raw_fif(data_path)
+    elif data_path.endswith('.vhdr'):
+        montage = mne.channels.read_montage(montage_path)
+        raw = mne.io.read_raw_brainvision(
+            data_path,
+            montage=montage,
+            eog=['ECG','ECG1']
+        )
+    else:
+        raise Exception("Unsupported EEG file format given. Supported types: .fif, .vhdr")
+
     raw.load_data()
     tmpdata = raw.get_data()
     events = mne.find_events(raw)
     print(events)
 
+    log.info("Running gradient removal...")
     raw = remove_gradient(
         raw,
         alignment_trigger_name=alignment_trigger_name,
@@ -46,6 +65,7 @@ def run(args=None, config=None):
     for t in range(raw.get_data().shape[0]):
         raw[t,:1790] = 0
 
+    log.info("Running BCG removal...")
     raw = remove_bcg(
         raw,
         montage_path,
