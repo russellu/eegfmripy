@@ -21,8 +21,9 @@ log = logging.getLogger("eegfmripy")
 def remove_bcg(
         raw,
         montage_path,
-        output=os.getcwd(),
+        output='bcgremoved' + str(int(time.time())) + '.fif',
         debug_plot=False,
+        debug_plot_verbose=False,
         bcg_peak_widths=list(range(25,45)),
         display_ica_components=False
     ):
@@ -35,13 +36,7 @@ def remove_bcg(
     print(events)
     raw = raw.resample(raw.info['sfreq'], verbose='error')
 
-    events = mne.find_events(raw)
-    print(events)
-
     heartdata = bcg_utils.sort_heart_components(raw)
-
-    events = mne.find_events(raw)
-    print(events)
 
     """
     run_bcg_denoise.py
@@ -73,13 +68,13 @@ def remove_bcg(
     for i in np.arange(0,heartdata.shape[1], chunk_size):
         log.info("On chunk starting from %s" % str(i))
         if i+chunk_size < heartdata.shape[1]:
-            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:i+chunk_size]) + i
+            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:i+chunk_size], peak_widths=bcg_peak_widths) + i
             new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
             new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
             new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
             all_peak_inds = new_peak_inds 
         else:
-            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:]) + i
+            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:], peak_widths=bcg_peak_widths) + i
             new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
             new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
             new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
@@ -98,13 +93,13 @@ def remove_bcg(
         plt.axvline(x=i, color='black')
     plt.show()
 
-    if debug_plot:
+    if debug_plot_verbose:
         for t in range(heartdata.shape[0]):
             plt.figure()
             plt.plot(heartdata[t,:])
             for i in peak_inds:
                 plt.axvline(x=i, color='black')
-            plt.show()
+        plt.show()
 
     mean_hr, hr_ts = bcg_utils.get_heartrate(raw,heartdata[0,:],peak_inds)
     print("HR:")
@@ -113,9 +108,6 @@ def remove_bcg(
 
     bcg_epochs, bcg_inds = bcg_utils.epoch_channel_heartbeats(
             raw.get_data(), int(mean_hr*0.95), peak_inds, raw.info['sfreq'])
-
-    events = mne.find_events(raw)
-    print(events)
 
     log.info(
         "In this figure, a recurring pattern (the BCG artifact) should be visible.\n" +
@@ -141,10 +133,7 @@ def remove_bcg(
     new_raw = helpers.create_raw_mne(subbed_raw, raw.ch_names, ['eeg' for _ in range(len(raw.ch_names))],
               mne.channels.read_montage(montage_path))
 
-    fname = os.path.join(
-        output,
-        'bcgrem_gradrem_' + str(int(time.time())) + gradrem_path.split('/')[-1].split('.')[0] + '.fif'
-    )
+    fname = output
 
     # Setup for reading the raw data
     events = mne.find_events(raw)
@@ -197,6 +186,10 @@ def run(args=None, config=None):
     if 'debug-plot' in config:
         debug_plot = config['debug-plot']
 
+    debug_plot_verbose = False
+    if 'debug-plot-verbose' in config:
+        debug_plot_verbose = config['debug-plot-verbose']
+
     bcg_peak_widths = list(range(25,45))
     if 'bcg_peak_widths' in config:
         bcg_peak_widths = config['bcg_peak_widths']
@@ -213,8 +206,12 @@ def run(args=None, config=None):
     remove_bcg(
         raw,
         montage_path,
-        output=output,
+        output=os.path.join(
+            output,
+            'bcgngradrem_' + str(int(time.time())) + gradrem_path.split('/')[-1].split('.')[0] + '.fif'
+        ),
         debug_plot=debug_plot,
+        debug_plot_verbose=debug_plot_verbose,
         bcg_peak_widths=bcg_peak_widths,
         display_ica_components=display_ica_components
     )

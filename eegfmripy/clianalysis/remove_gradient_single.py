@@ -117,7 +117,8 @@ def remove_gradient(
         alignment_trigger_name=None,
         slice_gradient_similarity_correlation=0.9,
         output=None,
-        debug_plot=False
+        debug_plot=False,
+        debug_plot_verbose=False
     ):
 
     tmpgraddata = raw.get_data()
@@ -138,17 +139,16 @@ def remove_gradient(
     graddata = np.zeros((tmpgraddata.shape[0], tmpgraddata.shape[1]-alignment_latency))
     for t in range(tmpgraddata.shape[0]):
         graddata[t, :] = tmpgraddata[t, alignment_latency:]
-    events = mne.find_events(raw)
-    print(events)
+
     slice_gap = get_slicegap(graddata[3,:])
+    log.info("Slice gap (in points): %s" % str(slice_gap))
+
     slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
 
     good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(
         slice_epochs,
         corrthresh=slice_gradient_similarity_correlation
     )
-    events = mne.find_events(raw)
-    print(events)
 
     error_msg = \
         'ERROR: Cannot find any gradients that are sufficiently similar to each other.' +\
@@ -161,7 +161,7 @@ def remove_gradient(
         write_same_line(str(i+1) + "/{}".format(graddata.shape[0]))
         highpass, lowpass = isolate_frequencies(graddata[i,:], 2, raw.info['sfreq'])
 
-        if debug_plot:
+        if debug_plot_verbose:
             plt.figure()
             fft = np.abs(np.fft.fft(highpass[:]))
             plt.plot(fft)
@@ -169,7 +169,7 @@ def remove_gradient(
 
         slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
 
-        if debug_plot:
+        if debug_plot_verbose:
             plt.figure()
             log.info(len(slice_epochs))
             plt.imshow(slice_epochs[500:1500])
@@ -179,38 +179,31 @@ def remove_gradient(
         graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
                 corrmat_thresh, graddata.shape[1]) + lowpass
 
-        if debug_plot:
+        if debug_plot_verbose:
             plt.figure()
             fft = np.abs(np.fft.fft(graddata[i,50000:graddata.shape[1]-50000]))
             plt.plot(fft)
             plt.title("FFT - After gradient subtraction")
 
-        if debug_plot:
+        if debug_plot_verbose:
             plt.show()
-        events = mne.find_events(raw)
-        print(events)
 
     finish_same_line()
     '''
     TODO: Output information about how to interpret the results.
     '''
+    if not output:
+        output = 'gradremoved' + str(int(time.time())) + '.fif'
 
-    fname = os.path.join(
-        output,
-        'gradientremoved_' + str(int(time.time())) + raw_vhdr.split('/')[-1].split('.')[0] + '.fif'
-    )
-
+    fname = output
     newgraddata = np.zeros(tmpgraddata.shape)
     for t in range(tmpgraddata.shape[0]):
         newgraddata[t, :alignment_latency] = tmpgraddata[t,:alignment_latency]
         newgraddata[t, alignment_latency:] = graddata[t,:]
-    events = mne.find_events(raw)
-    print(events)
+
     raw.load_data()
     raw[0:64,:] = newgraddata[0:64, :]
     raw.save(fname)
-    events = mne.find_events(raw)
-    print(events)
     plt.figure()
     fft = np.abs(np.fft.fft(newgraddata[3,50000:newgraddata.shape[1]-50000]))
     plt.plot(fft)
@@ -241,6 +234,9 @@ def run(args=None, config=None):
     debug_plot = False
     if 'debug-plot' in config:
         debug_plot = config['debug-plot']
+    debug_plot_verbose = False
+    if 'debug-plot-verbose' in config:
+        debug_plot_verbose = config['debug-plot-verbose']
 
     root, fname = os.path.split(montage_path)
 
@@ -255,6 +251,10 @@ def run(args=None, config=None):
         raw,
         alignment_trigger_name=alignment_trigger_name,
         slice_gradient_similarity_correlation=slice_gradient_similarity_correlation,
-        output=output,
-        debug_plot=debug_plot
+        output=os.path.join(
+            output,
+            'gradientremoved_' + str(int(time.time())) + raw_vhdr.split('/')[-1].split('.')[0] + '.fif'
+        ),
+        debug_plot=debug_plot,
+        debug_plot_verbose=debug_plot_verbose
     )
