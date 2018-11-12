@@ -136,7 +136,7 @@ def subtract_heartbeat_artifacts(raw_data, shifted_epochs, shifted_inds, n_avgs=
     return subbed_raw
 
 montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_E_DRIVE/')
-raw = mne.io.read_raw_eeglab('/media/sf_E_DRIVE/badger_eeg/alex/gradeeg_retino_gamma_01.set',montage=montage,eog=[31])
+raw = mne.io.read_raw_eeglab('/media/sf_E_DRIVE/badger_eeg/tegan/gradeeg_retino_rest.set',montage=montage,eog=[31])
 raw.load_data()
 raw_data = raw.get_data()[0:64,:] 
 hp_raw_data = mne.filter.filter_data(raw_data,250,1,124)

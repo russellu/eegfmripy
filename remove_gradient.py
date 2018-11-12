@@ -88,7 +88,10 @@ plt.plot(fft)
 
 
 
-
+montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_E_DRIVE/')
+raw = mne.io.read_raw_brainvision('/media/sf_E_DRIVE/sleepdata/CoRe_001/eeg/CoRe_001_Day1_Night_01.vhdr',montage=montage,
+                                  eog=['ECG','ECG1'])
+graddata = raw.get_data()
 
 
 
