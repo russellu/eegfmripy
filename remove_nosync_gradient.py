@@ -3,17 +3,6 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 
-def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
-    print("getting slice gap...")
-    mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
-    icount = 0
-    for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
-        mcorrs[:,icount] = signal.correlate(single_channel[i:i+wsize],single_channel[i:i+wsize], mode='same')
-        icount = icount + 1
-        
-    mcorrs = np.mean(mcorrs,axis=1)
-    return np.argmax(mcorrs[np.int(wsize/2)+maxcorr_pad:]) + maxcorr_pad
-
 def get_slicepochs(single_channel, slicegap):
     print("epoching slices...")
     nepochs = np.int(single_channel.shape[0] / slicegap)
@@ -86,12 +75,59 @@ raw = mne.io.read_raw_brainvision(
         '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
         montage=montage,eog=['ECG','ECG1'])
 
-graddata = raw.get_data()
+graddata = raw.get_data(picks=[0,1])
 
-slice_gap = get_slicegap(graddata[3,:])
+wsize=15000
+single_channel = graddata[0,:] 
+mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
+icount = 0
+for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
+    mcorrs[:,icount] = signal.correlate(single_channel[i:i+wsize],single_channel[i:i+wsize], mode='same')
+    icount = icount + 1
+    
+mcorrs = np.mean(mcorrs,axis=1)
+slice_gap = np.argmax(mcorrs[np.int(wsize/2)+50:]) + 50
+
 slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
-good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(slice_epochs, corrthresh=0.9)
 
+# if scanner clock is not synchronized, get the offset
+wsize=2000
+timepoint_epochs = slice_epochs[:,215]
+lagcorrs = np.zeros([wsize,np.int(timepoint_epochs.shape[0]/wsize)])
+icount = 0
+for i in np.arange(0, timepoint_epochs.shape[0] - wsize - 1, wsize):
+    lagcorrs[:,icount] = signal.correlate(timepoint_epochs[i:i+wsize],
+            timepoint_epochs[i:i+wsize], mode='same')
+    icount = icount + 1
+
+# manually find the clock offset
+
+clock_offset = 40 
+for e in np.arange(0, 1):
+    highpass, lowpass = isolate_frequencies(graddata[e,:], 2, 5000)
+    slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
+    new_chan = np.zeros(graddata.shape[1])
+    # get the clock offset here
+    for i in np.arange(0, clock_offset):
+        good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(
+                slice_epochs[i::clock_offset,:], corrthresh=0.9)
+        short_slice_epochs = replace_bad_slices(
+                slice_epochs[i::clock_offset,:], good_epoch_inds, bad_epoch_inds)       
+        subbed = subtract_gradient(
+                short_slice_epochs, slice_inds[i::clock_offset,:], 
+                corrmat_thresh, graddata.shape[1])
+        new_chan = new_chan + subbed 
+        
+        #current_inds = slice_inds[i::clock_offset,:]
+        #for j in np.arange(0,current_inds.shape[0]):
+        #    new_chan[current_inds[j]] = subbed[current_inds[j]]
+        
+        
+        
+        
+        
+#slice_gap = get_slicegap(graddata[3,:])
+"""
 for i in np.arange(0,graddata.shape[0]):
     highpass, lowpass = isolate_frequencies(graddata[i,:], 2, 5000)
     slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
@@ -101,7 +137,7 @@ for i in np.arange(0,graddata.shape[0]):
 
 fft = np.abs(np.fft.fft(graddata[3,50000:graddata.shape[1]-50000]))
 plt.plot(fft)
-
+"""
 
 
 

@@ -1,11 +1,6 @@
 import mne as mne
 import numpy as np
 from scipy import signal
-from scipy.interpolate import griddata
-from scipy.cluster.vq import kmeans, vq
-from scipy import signal
-import matplotlib.animation as animation
-from mne.preprocessing import ICA
 import matplotlib.pyplot as plt
 
 def get_slicegap(graddata, wsize=25000, maxcorr_pad=50):
@@ -73,10 +68,12 @@ def subtract_gradient(slice_epochs, slice_inds, corrmat_thresh, window_sz=60, wi
 
 # define function for finding start of TS given number of dummies (for aligning with FMRI)
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_E_DRIVE/')
-raw = mne.io.read_raw_brainvision('/media/sf_E_DRIVE/badger_eeg/russell/retino_allstim_02.vhdr',montage=montage,eog=[31])
+montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
+raw = mne.io.read_raw_brainvision(
+        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
+        montage=montage,eog=['ECG','ECG1'])
 
-graddata = raw.get_data()[0:64,:]
+graddata = raw.get_data()
 
 slicegap = get_slicegap(graddata)
 slice_epochs, slice_inds = get_slicepochs(graddata, slicegap)
