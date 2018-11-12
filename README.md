@@ -18,6 +18,9 @@ the package also estimates the following:
   2) respiratory volume trace based on amplitude of EEG ballistocardiogram artifacts
   3) millisecond precise head motion amplitude trace based on broadband high frequency EEG power
   
+  
+NB: due to overhead, the maximum size EEG dataset for a computer with 16 Gb RAM is 1.5Gb 
+    this will typically only be a problem during the gradient denoising step
 
 
 
