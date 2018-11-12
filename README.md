@@ -22,5 +22,8 @@ the package also outputs the following regressors:
   
 NB: due to overhead, the maximum size EEG dataset for a computer with 16 Gb RAM is 1.5Gb, this will typically only be a problem during the gradient denoising step
 
+Dependencies:
+
+the dependencies of eegfmripy are the same as for mne-python (https://github.com/mne-tools/mne-python/blob/master/README.rst)
 
 
