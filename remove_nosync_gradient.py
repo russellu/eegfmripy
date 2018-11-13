@@ -77,6 +77,9 @@ raw = mne.io.read_raw_brainvision(
 
 graddata = raw.get_data()[0:64,:]
 
+
+
+
 wsize=15000
 single_channel = graddata[0,:] 
 mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
@@ -102,13 +105,13 @@ for i in np.arange(0, timepoint_epochs.shape[0] - wsize - 1, wsize):
 
 # manually find the clock offset
     
-badchans = [17]
-chans = np.zeros((0,graddata.shape[0]))
+badchans = []
+chans = np.zeros((graddata.shape[0]))
 chans[badchans] = 1
-goodchans = np.where(chans==0)
+goodchans = np.where(chans==0)[0]
 
 clock_offset = 40 
-for e in np.arange(0,graddata.shape[0]):
+for e in np.arange(0,1):
     highpass, lowpass = isolate_frequencies(graddata[e,:], 2, 5000)
     slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
     new_chan = np.zeros(graddata.shape[1])
@@ -117,35 +120,34 @@ for e in np.arange(0,graddata.shape[0]):
         good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(
                 slice_epochs[i::clock_offset,:], corrthresh=0.9)
         
-        short_slice_epochs = replace_bad_slices(
-                slice_epochs[i::clock_offset,:], good_epoch_inds, bad_epoch_inds)    
+        if good_epoch_inds.shape[0] != 0: 
         
-        mean_epochs = np.mean(short_slice_epochs,axis=0)
-        all_peaks = np.unique(np.argmax(short_slice_epochs, axis=1))
-        
-        
-        subbed = subtract_gradient(
-                short_slice_epochs, slice_inds[i::clock_offset,:], 
-                corrmat_thresh, graddata.shape[1])
-        
-        # interpolate subbed at the max peak
-        current_inds = slice_inds[i::clock_offset,:]
-        for ind in np.arange(0,current_inds.shape[0]):
-            subbed[current_inds[ind,all_peaks]] = np.tile((
-                subbed[current_inds[ind,np.max(all_peaks)+1]] 
-                + subbed[current_inds[ind,np.min(all_peaks)-1]]) / 2,
-            (np.shape(all_peaks)))
+            short_slice_epochs = replace_bad_slices(
+                    slice_epochs[i::clock_offset,:], good_epoch_inds, bad_epoch_inds)    
             
+            mean_epochs = np.mean(short_slice_epochs,axis=0)
+            all_peaks = np.unique(np.argmax(short_slice_epochs, axis=1))
+                        
+            subbed = subtract_gradient(
+                    short_slice_epochs, slice_inds[i::clock_offset,:], 
+                    corrmat_thresh, graddata.shape[1])
+            
+            # interpolate subbed at the max peak
+            current_inds = slice_inds[i::clock_offset,:]
+            for ind in np.arange(0,current_inds.shape[0]):
+                subbed[current_inds[ind,all_peaks]] = np.tile((
+                    subbed[current_inds[ind,np.max(all_peaks)+1]] 
+                    + subbed[current_inds[ind,np.min(all_peaks)-1]]) / 2,
+                (np.shape(all_peaks)))
+                
+            
+            new_chan = new_chan + subbed
         
-        new_chan = new_chan + subbed 
+    graddata[e,:] = new_chan + lowpass
+
         
-        #current_inds = slice_inds[i::clock_offset,:]
-        #for j in np.arange(0,current_inds.shape[0]):
-        #    new_chan[current_inds[j]] = subbed[current_inds[j]]
-        
-f = np.abs(np.fft.fft(new_chan))
-        
-plt.plot(f[1:10000000])
+#f = np.abs(np.fft.fft(new_chan[500000:new_chan.shape[0]-500000]))      
+#plt.plot(f[1:10000000])
         
 #slice_gap = get_slicegap(graddata[3,:])
 """
