@@ -3,6 +3,7 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+import collections
 
 def get_slicepochs(single_channel, slicegap):
     print("epoching slices...")
@@ -78,8 +79,11 @@ def epoch_timeseries(timeseries, window_length):
         
     return epochs
 
-dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
+def fit_func(x, a):
+    return a*x
 
+dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
+dat0 = dat0[1:12000000]
 
 hp, lp = isolate_frequencies(dat0,2,5000)
 
@@ -107,57 +111,79 @@ mean_xcorrs = np.mean(shift_xcorrs,axis=0)
 maxinds = np.where(np.r_[True, mean_xcorrs[1:] > mean_xcorrs[:-1]] 
         & np.r_[mean_xcorrs[:-1] > mean_xcorrs[1:], True])
 
+
 offset = int(np.median(np.diff(maxinds)))
-
-epochs_i = slice_epochs[0::40,:]
-sort_diffs = np.zeros([epochs_i.shape[0], epochs_i.shape[0]])
-for i in np.arange(0,epochs_i.shape[0]):
-    diffs_i = (np.tile(epochs_i[[i],:],(epochs_i.shape[0],1)) - epochs_i)
-    sumdiffs = np.sum(np.abs(diffs_i),axis=1)
-    sort_diffs[i,:] = np.argsort(sumdiffs)
-    print(i)
-    
-def fit_func(x, a, b):
-    return a*x + b
-    
-    
-sort_diffs = sort_diffs.astype(int)
-sub_epochs = np.zeros(epochs_i.shape)
-for i in np.arange(0, sort_diffs.shape[0]):
-    template_i = np.mean(epochs_i[sort_diffs[i,1:30],:],axis=0)
-    params = curve_fit(fit_func, template_i, epochs_i[i,:])
-    fit_artifact = template_i*params[0][0] + params[0][1]
-    sub_epochs[i,:] = epochs_i[i,:] - fit_artifact
-
-
-
-
-
-"""
-# get all shifted epochs, get their lag, and then shift
-mean_grads = np.zeros([offset, slice_epochs.shape[1]])
-for i in np.arange(0,offset):
-    shift_epochs = slice_epochs[i::40,:]
-    mean_grads[i,:] = np.mean(shift_epochs,axis=0)
-
-res_grads = signal.resample(mean_grads, mean_grads.shape[1]*100, axis=1)
-shift_grads = np.zeros(res_grads.shape)
-lags = np.zeros(offset)
-for i in np.arange(0,offset):
-    xcorr = signal.correlate(res_grads[i,:],res_grads[0,:],mode='same')
-    lags[i] = np.argmax(xcorr) - int(res_grads.shape[1]/2)
-    shift_grads[i,:] = np.roll(res_grads[i,:],-int(lags[i]))
-"""
-# average the up-sampled shifter artifacts, then shift back and down-sample
-
-
-"""
-shift_slice_epochs = np.zeros([slice_epochs.shape[0],slice_epochs.shape[1]-offset])
-for i in np.arange(0,slice_epochs.shape[0]):
-    offset_i = offset-i%offset
-    shift_slice_epochs[i,:] = slice_epochs[i,offset_i:slice_epochs.shape[1]-(offset-offset_i)]
-"""        
+new_ts = np.zeros(dat0.shape)
+avg_epochs = np.zeros(slice_epochs.shape)
+for ofst in np.arange(0,offset):   
+    epochs_i = slice_epochs[ofst::40,:]       
+    max_dist = 800
+    if max_dist >= epochs_i.shape[0]:
+        max_dist = epochs_i.shape[0] 
         
+    sort_diffs = np.zeros([epochs_i.shape[0], max_dist])
+
+    for i in np.arange(0,epochs_i.shape[0]):      
+        closest_inds = np.where(np.abs(i - np.arange(0,epochs_i.shape[0])) < max_dist)[0]
+        
+        if closest_inds.shape[0] > max_dist:
+            closest_inds = closest_inds[0:max_dist]
+        
+        smallest_ind = np.min(closest_inds)
+        largest_ind = np.max(closest_inds)
+        
+        diffs_i = (np.tile(epochs_i[[i],:],(closest_inds.shape[0],1)) 
+                - epochs_i[smallest_ind:largest_ind+1,:])
+        
+        sumdiffs = np.sum(np.abs(diffs_i),axis=1)
+        sort_diffs[i,:] = np.argsort(sumdiffs) + smallest_ind
+          
+    current_slice_inds = slice_inds[ofst::40,:]
+    inds_i = np.arange(ofst,slice_epochs.shape[0],40)
+    sort_diffs = sort_diffs.astype(int) 
+    sub_epochs = np.zeros(epochs_i.shape)
+    
+    for i in np.arange(0, sort_diffs.shape[0]):
+        template_i = np.mean(epochs_i[sort_diffs[i,1:50],:],axis=0)
+        params = curve_fit(fit_func, template_i, epochs_i[i,:])
+        fit_artifact = template_i*params[0][0] #+ params[0][1]
+        fit_artifact = template_i
+        sub_epochs[i,:] = epochs_i[i,:] - fit_artifact
+        new_ts[current_slice_inds[i,:]] = sub_epochs[i,:]
+        avg_epochs[inds_i[i],:] = template_i 
+        
+    print(ofst)
+
+temp_avgs = np.zeros(avg_epochs.shape)
+temp_avgs[0,:] = avg_epochs[0,:]
+diffs = np.zeros(avg_epochs.shape[0])
+subbed_epochs = np.zeros(avg_epochs.shape)
+new_ts2 = np.zeros(dat0.shape)    
+for i in np.arange(0,avg_epochs.shape[0]-1):
+    new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:]
+    subbed_epochs[i,:] = slice_epochs[i,:] - avg_epochs[i,:]
+    diffs[i] = new_ts2[slice_inds[i,0]] - new_ts2[slice_inds[i-1,slice_inds.shape[1]-1]]
+    new_ts2[slice_inds[i,:]] = new_ts2[slice_inds[i,:]] - diffs[i]
+
+#plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
+
+hp2,lp2 = isolate_frequencies(new_ts2,2,5000)
+plt.plot(hp2 + lp); plt.plot(new_ts + (np.mean(hp2) - np.mean(new_ts)))
+
+max_epochs = np.argmax(slice_epochs, axis=1)
+counts = collections.Counter(max_epochs)
 
 
-
+"""
+vline = np.zeros(new_ts.shape)
+vline[slice_inds[:,0]] = 1
+ 
+new_ts2 = np.zeros(dat0.shape)    
+for i in np.arange(0,slice_inds.shape[0]):
+    new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:] - diffs[i]
+    
+plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
+"""
+    
+    
+    
