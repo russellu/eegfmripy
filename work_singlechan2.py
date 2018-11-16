@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy import spatial
 import mne as mne
+from scipy import stats
 
-def get_slicepochs(single_channel, slicegap):
+def epoch_gradient_slices(single_channel, slicegap):
     print("epoching slices...")
     nepochs = np.int(single_channel.shape[0] / slicegap)
     slice_epochs = np.zeros([nepochs, slicegap])
@@ -105,7 +106,7 @@ def remove_gap(new_ts,slice_inds):
         
     return new_ts
 
-def perform_aas(slice_epochs, slice_inds, offset):
+def average_artifact_subtraction(slice_epochs, slice_inds, offset):
     new_ts = np.zeros(single_channel.shape)
     for i in np.arange(0,offset):
         slices_i = slice_epochs[i::offset,:]
@@ -146,20 +147,44 @@ def get_slice_timing(single_channel, wsize=15000):
     
     return slice_gap
 
-dat0 = np.load('/media/sf_shared/graddata/graddata_17.npy')
+#dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
 #dat0 = dat0[0:10000000]
 
-hp, lp = isolate_frequencies(dat0,2,5000)
-single_channel = hp
-slice_gap = get_slice_timing(single_channel)
-slice_epochs, slice_inds = get_slicepochs(hp, slice_gap)
-offset = get_offset(slice_epochs)
-new_ts = perform_aas(slice_epochs, slice_inds, offset)
-new_ts = remove_gap(new_ts, slice_inds)
-new_ts = isolate_frequencies(new_ts,2,5000)[0]
-new_ts = interpolate_saturated_points(slice_epochs, slice_inds, new_ts)
-new_ts = new_ts + lp
-plt.plot(new_ts)
+montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
+raw = mne.io.read_raw_brainvision(
+        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
+        montage=montage,eog=['ECG','ECG1'])
+
+graddata = raw.get_data()[0:64,:]
+
+for gd in np.arange(0,graddata.shape[0]):
+    dat0 = graddata[gd,:]
+    hp, lp = isolate_frequencies(dat0,2,5000)
+    single_channel = hp
+    slice_gap = get_slice_timing(single_channel)
+    slice_epochs, slice_inds = epoch_gradient_slices(hp, slice_gap)
+    offset = get_offset(slice_epochs)
+    
+    new_ts = average_artifact_subtraction(slice_epochs, slice_inds, offset)
+    new_ts = remove_gap(new_ts, slice_inds)
+    new_ts = isolate_frequencies(new_ts,2,5000)[0]
+    new_ts = interpolate_saturated_points(slice_epochs, slice_inds, new_ts)
+    new_ts = new_ts + lp
+    graddata[gd,:] = new_ts 
+    
+    print(gd)
+
+
+chan1 = signal.decimate(graddata[0,:],20)
+dec_chans = np.zeros([graddata.shape[0],chan1.shape[0]])
+for i in np.arange(1,graddata.shape[0]):    
+    dec_chans[i,:] = signal.decimate(graddata[i,:],20)
+    print(i)
+
+np.save('dec_chans',dec_chans)
+
+
+
 
 
 
