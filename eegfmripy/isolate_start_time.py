@@ -58,7 +58,7 @@ stds = np.zeros(start_search_l)
 for i in np.arange(0,start_search_l):
     stds[i] = np.std(graddata[i:i+slice_len])
 
-from scipy.cluster.vq import vq, kmeans, whiten
+from scipy.cluster.vq import vq, kmeans
  
 k,d = kmeans(stds, 2)
 classes = vq(stds,k)[0]
