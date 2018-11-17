@@ -1,0 +1,6 @@
+pytest
+mne
+scipy
+numpy
+matplotlib
+ruamel.yaml
