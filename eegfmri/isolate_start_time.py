@@ -34,19 +34,25 @@ n_dummies = 3
 
 n_slice_artifacts = (n_volumes * n_slices) / mb_factor
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
-raw = mne.io.read_raw_brainvision(
-        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
-        montage=montage,eog=['ECG','ECG1'])
-
+from TestsEEGFMRI import example_raw 
+raw = example_raw()
 graddata = raw.get_data(picks=[1])
-
+graddata = np.squeeze(graddata)
 # the initial onset can only be found by using information from the average gradient
 # ie convolve with average gradient and compute offset? 
 slice_len = get_slice_sample_len(graddata) # slice length in samples
 slice_epochs, slice_inds = get_slice_epochs(graddata,slice_len)
 
+m_epoch = np.mean(slice_epochs,axis=0)
 
+conved = np.convolve((graddata[0:1000000]),m_epoch,mode='same')
+
+sort_desc = np.flip(np.argsort(conved))
+min_ind = np.min(sort_desc[0:10000]) - slice_len
+# use the projected number of slices and the start index to find the total length
+end_grad = min_ind + n_slice_artifacts*slice_len
+# find the number of slices after end_grad
+# use the slide window z-score approach - find the first outlier (out of 30+)
 
 
 
