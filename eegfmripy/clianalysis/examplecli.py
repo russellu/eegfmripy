@@ -12,9 +12,9 @@ def run(args=None, config=None):
 
 	log.info("Hello world!")
 
-	if 'config' in args:
+	if args.config:
 		log.info('Found a config!')
 		log.info('If it is correct, you will see True below.')
-		log.info(True if 'hello' in args['config'] else False)
+		log.info(True if 'hello' in args.config else False)
 	else:
 		log.info('Did not find a YAML config')
