@@ -150,10 +150,8 @@ def get_slice_timing(single_channel, wsize=15000):
 #dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
 #dat0 = dat0[0:10000000]
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
-raw = mne.io.read_raw_brainvision(
-        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
-        montage=montage,eog=['ECG','ECG1'])
+from TestsEEGFMRI import example_raw
+raw = example_raw()
 
 graddata = raw.get_data()[0:64,:]
 
