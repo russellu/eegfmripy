@@ -28,7 +28,8 @@ setup(
     url='https://github.com/russellu/eegfmripy',
     license='BSD',
     packages=[
-        'eegfmripy'
+        'eegfmripy',
+        'eegfmripy.clianalysis',
     ],
     include_package_data=True,
     install_requires=DEPS,
