@@ -63,7 +63,7 @@ class AnalysisParser(ArgumentParser):
 
 
 def run_analysis(analysis, args):
-	modname = '.eegfmripy.{}'.format(analysis)
+	modname = '.clianalysis.{}'.format(analysis)
 	mod = importlib.import_module(modname, package='eegfmripy')
 	log.debug("Result:")
 	mod.run(args=args)
