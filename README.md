@@ -1,10 +1,9 @@
 # eegfmripy
-python code for denoising eeg data from eeg-fmri experiments, and fusing eeg-fmri data
+Python code for denoising eeg data from eeg-fmri experiments, and fusing eeg-fmri data.
 
-a fully automatic pipeline from raw EEG data acquired inside the scanner, to source
-space EEG-BOLD correlations in each voxel.
+A fully automatic pipeline from raw EEG data acquired inside the scanner, to source space EEG-BOLD correlations in each voxel.
 
-the package performs the following in sequential order:
+The package performs the following in sequential order:
 
 1) gradient artifact removal
 2) ballistocardigram artifact removal
@@ -14,7 +13,7 @@ the package performs the following in sequential order:
 6) co-registration of source space with FMRI voxel space
 7) frequency specific EEG-FMRI correlations in each voxel 
 
-the package also outputs the following regressors:
+The package also outputs the following regressors:
   1) time-varying heart rate based on frequency of EEG ballistocardiogram artifacts
   2) respiratory volume based on amplitude of EEG ballistocardiogram artifacts
   3) millisecond precise head motion amplitude based on broadband high frequency EEG power
@@ -22,8 +21,12 @@ the package also outputs the following regressors:
   
 NB: due to overhead, the maximum size EEG dataset for a computer with 16 Gb RAM is 1.5Gb, this will typically only be a problem during the gradient denoising step
 
-Dependencies:
+Dependencies can be installed with
+```
+cd eegfmripy
+python setup.py install
+```
 
-the dependencies of eegfmripy are the same as for mne-python (https://github.com/mne-tools/mne-python/blob/master/README.rst)
+These dependencies are the same as for mne-python (https://github.com/mne-tools/mne-python/blob/master/README.rst)
 
 
