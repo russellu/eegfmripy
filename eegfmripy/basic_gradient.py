@@ -5,6 +5,7 @@ from scipy.optimize import curve_fit
 import mne as mne
 from scipy import stats
 import sys as sys
+from mne.preprocessing import ICA
 
 """
 basic_gradient.py
@@ -120,7 +121,7 @@ trigger_name = 'R1'
 sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy/tests')
 from tests import test_example_raw
 
-raw = test_example_raw()
+raw, montage = test_example_raw()
 
 graddata = raw.get_data()
 
@@ -146,14 +147,22 @@ for i in np.arange(0,graddata.shape[0]-1):
 
 dec = int(5000/250) 
 downsampled = np.zeros((graddata.shape[0]-1, int(graddata.shape[1]/dec)))
+
+dec_residuals = signal.decimate(residuals,dec) 
 for i in np.arange(0,graddata.shape[0]-1):
     downsampled[i,:] = signal.decimate(graddata[i,:], dec)
     print(i)
 
+ch_names, ch_types, inds = helpers.prepare_raw_channel_info(
+        downsampled, raw, montage)
 
 
-
-
+new_raw = helpers.create_raw_mne(downsampled[inds,:], ch_names, ch_types, montage)
+new_raw.filter(1,120)
+ica = ICA(n_components=60, method='fastica', random_state=23)
+ica.fit(new_raw)
+ica.plot_components(picks=np.arange(0,60))
+src = ica.get_sources(new_raw).get_data()
 
 
 

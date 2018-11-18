@@ -12,4 +12,4 @@ def test_example_raw():
         montage=montage, eog=['ECG','ECG1']
     )
     
-    return raw
+    return raw, montage

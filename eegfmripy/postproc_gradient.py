@@ -24,8 +24,6 @@ dec = np.load(data_path)
 #rawdat = raw.get_data()
 #raw = raw.resample(250)
 
-
-
 inds = np.arange(0,dec.shape[0])
 bads = [raw.ch_names.index('ECG'), raw.ch_names.index('ECG1')]
 inds = np.delete(inds, bads)

@@ -1,6 +1,6 @@
 import nibabel as nib 
-
-
+import mne as mne
+import numpy as np
 
 """
 read .vmrk file, get all unique events, and return the following lists
@@ -39,5 +39,45 @@ def fmri_info(path):
     n_volumes = hdr.get_data_shape()[3]
     
     return TR, n_slices, n_volumes
+
+
+"""
+create_raw_mne: create a new mne 'raw' data structure from data, channel
+names, channel types, and montage
+
+"""
+
+def create_raw_mne(data, ch_names, ch_types, montage):
+    info = mne.create_info(ch_names=ch_names,ch_types=ch_types,sfreq=250)
+    newraw = mne.io.RawArray(data,info)
+    newraw.set_montage(montage)
+    
+    return newraw
+
+
+"""
+
+
+"""
+
+def prepare_raw_channel_info(downsampled, raw, montage):
+    
+    inds = np.arange(0,downsampled.shape[0])
+    bads = [raw.ch_names.index('ECG'), raw.ch_names.index('ECG1')]
+    inds = np.delete(inds, bads)
+    
+    newinds = np.zeros(inds.shape)
+    positions = np.zeros([inds.shape[0],2])
+    for i in np.arange(0,inds.shape[0]):    
+        newinds[i] = np.int(montage.ch_names.index(raw.ch_names[inds[i]]))
+        positions[i,:] = montage.get_pos2d()[newinds[i].astype(int),:]
+    
+    ch_types = [] 
+    ch_names = []
+    for i in np.arange(0,63):
+        ch_types.append('eeg')
+        ch_names.append(raw.ch_names[inds[i]])
+        
+    return ch_names, ch_types, inds
 
 
