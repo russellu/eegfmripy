@@ -2,10 +2,9 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from scipy import spatial
 import mne as mne
 from scipy import stats
-
+import sys as sys
 
 """
 basic_gradient.py
@@ -56,14 +55,100 @@ basic_gradient(eeg_data_path, nifti_data_path, n_dummies=3)
     
 """
 
+"""
+
+basic_gradient_removal: 
+    
+    remove gradient artifacts from EEG time series in the
+    most basic possible way: volume by volume, using slide window average 
+    artifact subtraction. 
+    
+    can also interpolate amplifier saturation points
+
+"""
+def basic_gradient_removal(data, grad_lats, n_volumes, tr_samples):
+
+    print('removing gradient')
+    
+    vol_epochs = np.zeros((n_volumes,tr_samples))
+    vol_inds = np.zeros((n_volumes,tr_samples))
+    for i in np.arange(0, n_volumes):
+        vol_epochs[i,:] = data[grad_lats[i]:grad_lats[i] + tr_samples]
+        vol_inds[i,:] = np.arange(grad_lats[i], grad_lats[i] + tr_samples)
+    
+    vol_inds = vol_inds.astype(int)
+    
+    window_sz=30
+    window_std=9
+    
+    window = signal.gaussian(window_sz, std=window_std)
+    window = np.reshape(window / np.sum(window),[window.shape[0],1])   
+    
+    smooth_epochs = np.zeros(vol_epochs.shape)        
+    smooth_epochs[:,:] = signal.convolve2d(vol_epochs, 
+                 window, boundary='symm', mode='same')   
+         
+    subbed_epochs = vol_epochs - smooth_epochs
+    residuals = np.sum(np.abs(np.diff(subbed_epochs,axis=1)),axis=1)
+    
+    
+    new_ts = np.zeros(data.shape)
+    resid_ts = np.zeros(data.shape)
+    for i in np.arange(0,subbed_epochs.shape[0]):
+        max_i = np.max(vol_epochs[i,:])
+        new_ts[vol_inds[i,:]] = subbed_epochs[i,:]
+        max_inds = vol_inds[i,np.where(vol_epochs[i,:]==max_i)[0]]
+        
+        # interpolate the saturation points 
+        for j in np.arange(0,max_inds.shape[0]):
+            new_ts[max_inds[j]] = new_ts[max_inds[j]-2]/2 + new_ts[max_inds[j]+2]/2
+         
+        resid_ts[vol_inds[i]] = residuals[i]
+            
+            
+    return new_ts, resid_ts
+
+
+
+
 TR = 1
 n_slices = 40
 n_volumes = 3000
 srate = 5000
 trigger_name = 'R1'
 
+sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy/tests')
+from tests import test_example_raw
 
+raw = test_example_raw()
 
+graddata = raw.get_data()
+
+import helpers 
+event_ids, event_lats = helpers.read_vmrk(
+        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vmrk')
+
+event_lats = np.array(event_lats)
+grad_inds = [index for index, value in enumerate(event_ids) if value == 'R1']
+grad_inds = np.array(grad_inds)
+grad_lats = event_lats[grad_inds]
+
+tr, n_slices, n_volumes = helpers.fmri_info(
+'/media/sf_shared/CoRe_011/rfMRI/d2/11-BOLD_Sleep_BOLD_Sleep_20150824220820_11.nii')
+
+tr_samples = int(tr*5000)
+residuals = np.zeros(graddata[0,:].shape)
+
+for i in np.arange(0,graddata.shape[0]-1):
+    graddata[i,:], resid = basic_gradient_removal(
+            graddata[i,:], grad_lats, n_volumes, tr_samples)
+    residuals = residuals + resid/(graddata.shape[0]-1)
+
+dec = int(5000/250) 
+downsampled = np.zeros((graddata.shape[0]-1, int(graddata.shape[1]/dec)))
+for i in np.arange(0,graddata.shape[0]-1):
+    downsampled[i,:] = signal.decimate(graddata[i,:], dec)
+    print(i)
 
 
 
