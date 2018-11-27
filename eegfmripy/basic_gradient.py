@@ -134,6 +134,7 @@ grad_inds = [index for index, value in enumerate(event_ids) if value == 'R1']
 grad_inds = np.array(grad_inds)
 grad_lats = event_lats[grad_inds]
 
+
 tr, n_slices, n_volumes = helpers.fmri_info(
 '/media/sf_shared/CoRe_011/rfMRI/d2/11-BOLD_Sleep_BOLD_Sleep_20150824220820_11.nii')
 
@@ -164,5 +165,14 @@ ica.fit(new_raw)
 ica.plot_components(picks=np.arange(0,60))
 src = ica.get_sources(new_raw).get_data()
 
+res_grad_lats = grad_lats / dec 
+start_t = res_grad_lats[0]
+end_t = res_grad_lats[-1]
 
+info = mne.create_info(['STIM_GRAD'], new_raw.info['sfreq'], ['stim'])
+stim_data = np.zeros((1,src.shape[1]))
+stim_data[0,res_grad_lats.astype(int)] = 1 
+stim_raw = mne.io.RawArray(stim_data, info)
+new_raw.add_channels([stim_raw], force_update_info=True)
 
+new_raw.save('new_raw.fif')
