@@ -81,3 +81,10 @@ def prepare_raw_channel_info(downsampled, raw, montage):
     return ch_names, ch_types, inds
 
 
+def montage_path():
+    return '/media/sf_shared/standard-10-5-cap385.elp'
+
+def test_data_path():
+    return '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr'
+
+
