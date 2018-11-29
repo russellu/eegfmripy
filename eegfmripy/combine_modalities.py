@@ -1,8 +1,11 @@
 import mne as mne 
 import nibabel as nib 
-import remove_bcg
 import matplotlib.pyplot as plt 
 import numpy as np 
+import sys as sys
+
+sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy')
+import remove_bcg
 
 raw = mne.io.read_raw_fif('/media/sf_shared/graddata/new_raw.fif')
 raw.load_data()
@@ -17,20 +20,38 @@ for i in np.arange(0,heartdata.shape[1], chunk_size):
     print(i)
     if i+chunk_size < heartdata.shape[1]:
         peak_inds = remove_bcg.get_heartbeat_peaks(heartdata[0,i:i+chunk_size]) + i
-        all_peak_inds = np.concatenate(all_peak_inds, peak_inds)
+        new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
+        new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
+        new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
+        all_peak_inds = new_peak_inds 
     else:
-        peak_inds = remove_bcg.get_heartbeak_peaks(heartdata[0,i:]) + i
-        all_peak_inds = np.concatenate(all_peak_inds, peak_inds)
+        peak_inds = remove_bcg.get_heartbeat_peaks(heartdata[0,i:]) + i
+        new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
+        new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
+        new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
+        all_peak_inds = new_peak_inds 
 
-peak_arr = np.zeros([0,100000])
-peak_arr[peak_inds] = 1 
+all_peak_inds = all_peak_inds.astype(int)
+peak_arr = np.zeros(heartdata.shape[1])
+peak_arr[all_peak_inds] = 1 
 
+peak_inds = remove_bcg.remove_bad_peaks(heartdata[0,:], all_peak_inds)
 
+mean_hr, hr_ts = remove_bcg.get_heartrate(raw,heartdata[0,:],peak_inds)
 
-
-peak_inds = remove_bcg.remove_bad_peaks(heartdata[0,:], peak_inds)
-
-mean_hr, hr_ts = remove_bcg.get_heartrate(heartdata[0,:],peak_inds)
 bcg_epochs, bcg_inds = remove_bcg.epoch_channel_heartbeats(
-        hp_raw_data, int(mean_hr*0.95), raw.info['sfreq'])
+        raw.get_data(), int(mean_hr*0.95), peak_inds, raw.info['sfreq'])
+
+shifted_epochs, shifted_inds = remove_bcg.align_heartbeat_peaks(
+        bcg_epochs, bcg_inds)
+
+subbed_raw = remove_bcg.subtract_heartbeat_artifacts(
+       raw.get_data(), shifted_epochs, shifted_inds)
+
+
+
+
+
+
+
 
