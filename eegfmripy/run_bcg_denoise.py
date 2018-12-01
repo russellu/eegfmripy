@@ -12,6 +12,27 @@ raw = mne.io.read_raw_fif('/media/sf_shared/graddata/new_raw.fif')
 raw.load_data()
 heartdata = remove_bcg.sort_heart_components(raw)
 
+"""
+run_bcg_denoise.py
+
+run the bcg denoising pipeline - calls functions from remove_bcg.py
+
+isolates the heartbeat component by running ICA and finding 
+top median skew component
+
+finds peaks by first 'chunking' the data (peak detection is slow on long ts)
+and using wavelet peak detection to locate peaks of specified width
+
+removes spurious peaks by correlating each peak with all other peaks, and
+removing the least commonly occuring peaks (assumes true peaks are most common)
+
+re-aligns peaks across all channels using cross-correlation within ~100ms 
+acceptable peak range shift (empirical values across scalp)
+
+finally, subtracts peaks from similar peaks using ssd similarity metric across
+the entirety of the peak epoch vector 
+
+"""
 
 # chunk the data and get heartbeat peaks in individual chunks
 
