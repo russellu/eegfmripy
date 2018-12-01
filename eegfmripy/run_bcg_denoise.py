@@ -6,6 +6,7 @@ import sys as sys
 
 sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy')
 import remove_bcg
+import helpers
 
 raw = mne.io.read_raw_fif('/media/sf_shared/graddata/new_raw.fif')
 raw.load_data()
@@ -48,10 +49,15 @@ shifted_epochs, shifted_inds = remove_bcg.align_heartbeat_peaks(
 subbed_raw = remove_bcg.subtract_heartbeat_artifacts(
        raw.get_data(), shifted_epochs, shifted_inds)
 
+bads = [raw.ch_names.index('STIM_GRAD')]
+ch_names, ch_types, eeg_inds = helpers.prepare_raw_channel_info(
+        subbed_raw, raw, mne.channels.read_montage(helpers.montage_path()), bads)
 
+new_raw = helpers.create_raw_mne(subbed_raw[0:63,:], ch_names, ch_types,
+          mne.channels.read_montage(helpers.montage_path()))
 
+save_path = '/media/sf_shared/graddata/bcg_denoised_raw.fif'
 
-
-
+new_raw.save(save_path)
 
 

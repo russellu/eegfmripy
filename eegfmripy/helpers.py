@@ -60,25 +60,25 @@ def create_raw_mne(data, ch_names, ch_types, montage):
 
 """
 
-def prepare_raw_channel_info(downsampled, raw, montage):
+def prepare_raw_channel_info(downsampled, raw, montage, bads):
     
-    inds = np.arange(0,downsampled.shape[0])
-    bads = [raw.ch_names.index('ECG'), raw.ch_names.index('ECG1')]
-    inds = np.delete(inds, bads)
+    eeg_inds = np.arange(0,downsampled.shape[0])
     
-    newinds = np.zeros(inds.shape)
-    positions = np.zeros([inds.shape[0],2])
-    for i in np.arange(0,inds.shape[0]):    
-        newinds[i] = np.int(montage.ch_names.index(raw.ch_names[inds[i]]))
+    eeg_inds = np.delete(eeg_inds, bads)
+    
+    newinds = np.zeros(eeg_inds.shape)
+    positions = np.zeros([eeg_inds.shape[0],2])
+    for i in np.arange(0,eeg_inds.shape[0]):    
+        newinds[i] = np.int(montage.ch_names.index(raw.ch_names[eeg_inds[i]]))
         positions[i,:] = montage.get_pos2d()[newinds[i].astype(int),:]
     
     ch_types = [] 
     ch_names = []
     for i in np.arange(0,63):
         ch_types.append('eeg')
-        ch_names.append(raw.ch_names[inds[i]])
+        ch_names.append(raw.ch_names[eeg_inds[i]])
         
-    return ch_names, ch_types, inds
+    return ch_names, ch_types, eeg_inds
 
 
 def montage_path():
