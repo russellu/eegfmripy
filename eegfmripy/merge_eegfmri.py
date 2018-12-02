@@ -8,6 +8,7 @@ from nilearn.decomposition import CanICA
 import sys as sys
 sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy')
 import helpers
+from scipy import stats
 """
 functions to merge ICA denoised EEG data with BOLD ICA components
 
@@ -76,6 +77,7 @@ what you actually want is single trial EEG and BOLD psd
 first get all the indices that are contained within the BOLD timeseries
 then, get the EEG power spectrum values within those same indices 
 """
+eeg_srate = 250 
 bold_pre_samples = 5
 bold_post_samples = 15 
 eeg_pre_samples = int(bold_pre_samples*fmri_info[0]*eeg_srate)
@@ -83,6 +85,7 @@ eeg_post_samples = int(bold_post_samples*fmri_info[0]*eeg_srate)
 bold_conversion = eeg_srate / (1/fmri_info[0])
 
 all_bold_epochs = []
+all_eeg_epochs = []
 for trig in np.arange(0, len(trigger_names)):
     trig_inds = get_trigger_inds(trigger_names[trig], event_ids)
     trig_lats = event_lats[trig_inds]
@@ -96,4 +99,69 @@ for trig in np.arange(0, len(trigger_names)):
     eeg_epochs = epoch_triggers(raw_data,eeg_lats,eeg_pre_samples, eeg_post_samples)
 
     all_bold_epochs.append(bold_epochs)
+    all_eeg_epochs.append(eeg_epochs)
+
+# comput power
+for i in np.arange(0,len(all_eeg_epochs)):
+    eeg_epochs = all_eeg_epochs[i]
+    bold_epochs = all_bold_epochs[i]
+    
+    bold_f, bold_pxx = signal.welch(bold_epochs)
+    eeg_f, eeg_pxx = signal.welch(eeg_epochs)
+
+# correlate power across different epochs 
+r = np.zeros((bold_pxx.shape[0], bold_pxx.shape[2],eeg_pxx.shape[2]))
+for i in np.arange(0,bold_pxx.shape[0]):
+    for j in np.arange(0,bold_pxx.shape[2]):
+        for k in np.arange(0,eeg_pxx.shape[2]):
+            r[i,j,k],p = stats.pearsonr(bold_pxx[i,:,j],eeg_pxx[0,:,k])
+            
+
+from scipy.signal import butter, lfilter
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
+
+#skimage.transform.resize(image, 
+#                         output_shape, order=1, mode='reflect', cval=0, 
+#                         clip=True, preserve_range=False, anti_aliasing=True, 
+#                         anti_aliasing_sigma=None)
+
+from skimage import transform
+
+
+gauss = signal.gaussian(eeg_srate, 20)
+gauss = gauss/np.sum(gauss)
+
+
+freqs = np.arange(2,122,2)
+chan_freqs = np.zeros((raw_data.shape[0], freqs.shape[0], comps.shape[1]))
+for i in np.arange(0,freqs.shape[0]):
+    filt = butter_bandpass_filter(raw_data, freqs[i]-1,freqs[i]+1, 250)
+    filt = np.abs(filt)
+    gauss_filt = np.zeros(filt.shape)
+    for j in np.arange(0,raw_data.shape[0]):
+        smooth_filt = signal.convolve(filt[j,:],gauss,mode='same')
+        gauss_filt[j,:] = smooth_filt[0:raw_data.shape[1]]
+    
+    gauss_filt = transform.resize(
+            gauss_filt[:,start_ind:end_ind],[filt.shape[0],comps.shape[1]])
+    
+    chan_freqs[:,i,:] = gauss_filt
+    print(i)
+
+
+
+
+
+
 
