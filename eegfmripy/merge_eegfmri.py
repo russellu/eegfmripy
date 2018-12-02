@@ -37,7 +37,6 @@ fmri_info = helpers.fmri_info(fmri_path)
 
 canica.fit(fmri)
 
-comps = canica.transform([fmri])
 cimg = canica.components_img_.get_data()
 
 # plot components 
@@ -80,15 +79,35 @@ for stage in sleep_stages:
     
     
 # get power spectrum for different sleep stages (BOLD)
+comps = canica.transform([fmri])[0]
 
+bold_srate = 1/fmri_info[0]
+bold_epochl = int(7500 / (250/bold_srate))
+bold_pxx = np.zeros((4,comps.shape[1],7))
+stage_count = 0 
+for stage in sleep_stages:
+    print(stage)
+    stage_inds = [index for index, value in enumerate(event_ids) if value == stage]
+    stage_lats = event_lats[stage_inds] - start_ind 
+    neg_inds = np.where(stage_lats < 0)
+    stage_lats = np.delete(stage_lats,neg_inds)
+    tr_lats = stage_lats / (250/bold_srate)
+    tr_lats = tr_lats.astype(int)
+    
+    lat_epochs = np.zeros((comps.shape[1], tr_lats.shape[0],int(bold_epochl)))
+    for lat in np.arange(0,tr_lats.shape[0]):
+        delete_last = False
+        if tr_lats[lat] + bold_epochl < comps.shape[0]:
+            lat_epochs[:,lat,:] = comps[tr_lats[lat]:tr_lats[lat]+bold_epochl,:].transpose()
+        else:
+            delete_last = True
+        
+        if delete_last == True:
+            lat_epochs = np.delete(lat_epochs,lat_epochs.shape[1]-1,axis=1)
 
-[f,pxx] = signal.welch(lat_epochs[9,:,:],fs=250)
-
-
-
-
-
-
+    f,pxx = signal.welch(lat_epochs,bold_srate)
+    bold_pxx[stage_count,:,:] = np.mean(pxx,axis=1)
+    stage_count = stage_count + 1
 
 
 
