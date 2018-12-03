@@ -10,6 +10,7 @@ sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy')
 import helpers
 from scipy import stats
 from scipy.stats import gamma
+from skimage import transform
 
 """
 functions to merge ICA denoised EEG data with BOLD ICA components
@@ -130,8 +131,8 @@ first get all the indices that are contained within the BOLD timeseries
 then, get the EEG power spectrum values within those same indices 
 """
 eeg_srate = 250 
-bold_pre_samples = 5
-bold_post_samples = 15 
+bold_pre_samples = 15
+bold_post_samples = 25 
 eeg_pre_samples = int(bold_pre_samples*fmri_info[0]*eeg_srate)
 eeg_post_samples = int(bold_post_samples*fmri_info[0]*eeg_srate)
 bold_conversion = eeg_srate / (1/fmri_info[0])
@@ -156,32 +157,12 @@ for trig in np.arange(0, len(trigger_names)):
 # comput power
 for i in np.arange(0,len(all_eeg_epochs)):
     eeg_epochs = all_eeg_epochs[i]
-    bold_epochs = all_bold_epochs[i]
-    
+    bold_epochs = all_bold_epochs[i]  
     bold_f, bold_pxx = signal.welch(bold_epochs)
     eeg_f, eeg_pxx = signal.welch(eeg_epochs)
-
-# correlate power across different epochs 
-r = np.zeros((bold_pxx.shape[0], bold_pxx.shape[2],eeg_pxx.shape[2]))
-for i in np.arange(0,bold_pxx.shape[0]):
-    for j in np.arange(0,bold_pxx.shape[2]):
-        for k in np.arange(0,eeg_pxx.shape[2]):
-            r[i,j,k],p = stats.pearsonr(bold_pxx[i,:,j],eeg_pxx[0,:,k])
-            
-
-
-
-#skimage.transform.resize(image, 
-#                         output_shape, order=1, mode='reflect', cval=0, 
-#                         clip=True, preserve_range=False, anti_aliasing=True, 
-#                         anti_aliasing_sigma=None)
-
-from skimage import transform
-
-
+   
 gauss = signal.gaussian(eeg_srate, 20)
 gauss = gauss/np.sum(gauss)
-
 
 freqs = np.zeros((5,2))
 freqs[0,0] = 1; freqs[0,1] = 3
@@ -192,8 +173,6 @@ freqs[4,0] = 30; freqs[4,1] = 80
 
 chan_freqs = filter_and_downsample(raw_data, comps, freqs, start_ind, end_ind)
 conved = convolve_chanfreqs(np.log(chan_freqs), hrf)
-
-
 
 # epoch all the hrf-convolved filtered EEG power 
 all_conved_epochs = []
@@ -213,13 +192,13 @@ for trig in np.arange(0, len(trigger_names)):
     all_conved_epochs.append(conved_epochs)
 
 
-all_xcorrs = np.zeros((40,50))
-for c in np.arange(0,40):
-    sig1 = chan_freqs[3,2,:]
-    sig2 = comps[c,:]
-    sig2 = butter_bandpass_filter(sig2,0.005,0.1,1/fmri_info[0])
-    nlags = 50
-    
+sig1 = chan_freqs[3,2,:]
+sig2 = comps[0,:]
+sig2 = butter_bandpass_filter(sig2,0.005,0.1,1/fmri_info[0])
+nlags = 50
+
+
+def xcorr(sig1, sig2, nlags): 
     vec_l = sig1.shape[0] - nlags
     xcorrs = np.zeros(nlags)
     vec1 = sig1[int(sig1.shape[0]/2 - vec_l/2) : int(sig1.shape[0]/2+ vec_l/2)]
@@ -227,22 +206,56 @@ for c in np.arange(0,40):
     for i in np.arange(0,nlags):
         vec2 = sig2[(start_p+i):(start_p+vec_l+i)]    
         xcorrs[i] = np.corrcoef(vec1,vec2)[0,1]
-        
-    all_xcorrs[c,:] = xcorrs 
-        
-
     
-"""
-current_corrs = np.zeros((4, all_conved_epochs[0].shape[0],
-                all_conved_epochs[0].shape[1], all_bold_epochs[0].shape[0]))
-for i in np.arange(0,len(all_conved_epochs)):   
+    return xcorrs
+        
 
-    for j in np.arange(0,all_conved_epochs[i].shape[0]):
+
+all_xcorrs = []
+for i in np.arange(0,len(all_conved_epochs)):
+    
+    xc_i = np.zeros((1, all_conved_epochs[i].shape[1],
+        all_conved_epochs[i].shape[2], all_bold_epochs[i].shape[0],20))
+    
+    for j in np.arange(0,1):
         print(j)
         for k in np.arange(0,all_conved_epochs[i].shape[1]):
-            for el in np.arange(0,all_bold_epochs[i].shape[0]):
-                    r,p = stats.pearsonr(all_conved_epochs[i][j,k,:,:].flatten(),
-                                         all_bold_epochs[i][el,:,:].flatten())                   
-                    current_corrs[i,j,k,el] = r
-"""
+            for el in np.arange(0,all_conved_epochs[i].shape[2]):
+                    for m in np.arange(0,all_bold_epochs[i].shape[0]):
+                        xc_i[j,k,el,m,:] = xcorr(
+                                all_conved_epochs[i][5,k,el,:],
+                                all_bold_epochs[i][m,el,:],20)
+                        
+    all_xcorrs.append(xc_i)
 
+plt.plot(np.mean(all_xcorrs[1][0,1,:,0,:],axis=0))
+plt.plot(np.mean(all_xcorrs[2][0,1,:,0,:],axis=0))
+plt.plot(np.mean(all_xcorrs[3][0,1,:,0,:],axis=0))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# correlate power across different epochs 
+"""
+r = np.zeros((bold_pxx.shape[0], bold_pxx.shape[2],eeg_pxx.shape[2]))
+for i in np.arange(0,bold_pxx.shape[0]):
+    for j in np.arange(0,bold_pxx.shape[2]):
+        for k in np.arange(0,eeg_pxx.shape[2]):
+            r[i,j,k],p = stats.pearsonr(bold_pxx[i,:,j],eeg_pxx[0,:,k])
+"""        
