@@ -6,6 +6,8 @@ import mne as mne
 from scipy import stats
 import sys as sys
 from mne.preprocessing import ICA
+sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy')
+import helpers
 
 """
 basic_gradient.py
@@ -110,33 +112,40 @@ def basic_gradient_removal(data, grad_lats, n_volumes, tr_samples):
     return new_ts, resid_ts
 
 
+base_path = '/media/sf_hcp/sleepdata/'
+eeg_sub = 'CoRe_011/eeg/'
+eeg_path = 'CoRe_011_Day1_Night_01.vhdr'
+trig_path = 'CoRe_011_Day1_Night_01.vmrk'
+
+fmri_sub = 'CoRe_011/rfMRI/'
+fmri_path = 'd1/sleep_0.nii'
+
+eeg_srate = 5000 
+grad_trigger = 'R1'
+
+tr, n_slices, n_volumes = helpers.fmri_info(base_path + fmri_sub + fmri_path)
+event_ids, event_lats = helpers.read_vmrk(base_path + eeg_sub + trig_path)
+
+# perform basic check to ensure number of volumes match number of volume trigs
+grad_inds, grad_lats = helpers.trig_info(event_ids, event_lats, grad_trigger)
+helpers.check_vol_triggers(n_volumes, grad_inds)
+
+montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_hcp/')
+raw = mne.io.read_raw_brainvision(base_path + eeg_sub + eeg_path,
+                                  montage=montage,eog=['ECG','ECG1'])
+
+eeg_ch_inds, ecg_ch_inds = helpers.isolate_eeg_channels(raw, montage)
 
 
-TR = 1
-n_slices = 40
-n_volumes = 3000
-srate = 5000
-trigger_name = 'R1'
+ch_picks = np.arange(0,32)
 
-sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy/tests')
-from tests import test_example_raw
-
-raw, montage = test_example_raw()
-
-graddata = raw.get_data()
-
-import helpers 
-event_ids, event_lats = helpers.read_vmrk(
-        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vmrk')
-
-event_lats = np.array(event_lats)
-grad_inds = [index for index, value in enumerate(event_ids) if value == 'R1']
-grad_inds = np.array(grad_inds)
-grad_lats = event_lats[grad_inds]
+graddata = raw.get_data(picks=0)
 
 
-tr, n_slices, n_volumes = helpers.fmri_info(
-'/media/sf_shared/CoRe_011/rfMRI/d2/11-BOLD_Sleep_BOLD_Sleep_20150824220820_11.nii')
+
+
+
+
 
 tr_samples = int(tr*5000)
 residuals = np.zeros(graddata[0,:].shape)
@@ -149,6 +158,14 @@ for i in np.arange(0,graddata.shape[0]-1):
 dec = int(5000/250) 
 downsampled = np.zeros((graddata.shape[0]-1, int(graddata.shape[1]/dec)))
 
+
+
+
+
+
+
+
+
 dec_residuals = signal.decimate(residuals,dec) 
 for i in np.arange(0,graddata.shape[0]-1):
     downsampled[i,:] = signal.decimate(graddata[i,:], dec)
@@ -156,7 +173,6 @@ for i in np.arange(0,graddata.shape[0]-1):
 
 ch_names, ch_types, inds = helpers.prepare_raw_channel_info(
         downsampled, raw, montage)
-
 
 new_raw = helpers.create_raw_mne(downsampled[inds,:], ch_names, ch_types, montage)
 new_raw.filter(1,120)

@@ -8,7 +8,6 @@ read .vmrk file, get all unique events, and return the following lists
 list1: event ids
 list2: event latencies
 """
-
 def read_vmrk(path):
 
     with open(path) as f:
@@ -44,9 +43,7 @@ def fmri_info(path):
 """
 create_raw_mne: create a new mne 'raw' data structure from data, channel
 names, channel types, and montage
-
 """
-
 def create_raw_mne(data, ch_names, ch_types, montage):
     info = mne.create_info(ch_names=ch_names,ch_types=ch_types,sfreq=250)
     newraw = mne.io.RawArray(data,info)
@@ -56,10 +53,8 @@ def create_raw_mne(data, ch_names, ch_types, montage):
 
 
 """
-
-
+prepare_raw_channel_info
 """
-
 def prepare_raw_channel_info(downsampled, raw, montage, bads):
     
     eeg_inds = np.arange(0,downsampled.shape[0])
@@ -87,4 +82,50 @@ def montage_path():
 def test_data_path():
     return '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr'
 
+"""
+trig_info
+"""
+def trig_info(event_ids, event_lats, trig_name):
+    event_lats = np.array(event_lats)
+    trig_inds = [index for index, value in enumerate(event_ids) if value == trig_name]
+    trig_inds = np.array(trig_inds)
+    trig_lats = event_lats[trig_inds]
+    
+    return trig_inds, trig_lats
 
+"""
+check_vol_triggers
+"""
+def check_vol_triggers(n_volumes, grad_inds):
+    if n_volumes == grad_inds.shape[0]:
+        print('#volumes matches #volume trigs')
+    else:
+        print('WARNING: #volumes does not match #volume trigs')
+        print('#volumes = ' + str(n_volumes))
+        print('#volume trigs = ' + str(grad_inds.shape[0]))
+              
+"""
+isolate_eeg_channels
+get the EEG and ECG channels indices from the montage in two separate arrays
+
+"""
+def isolate_eeg_channels(raw, montage):
+
+    heart_chans = ['ECG','ECG1']
+    
+    eeg_chan_inds = []
+    heart_chan_inds = [] 
+    
+    for i in np.arange(0, len(raw.ch_names)):
+        if raw.ch_names[i] in montage.ch_names:
+            eeg_chan_inds.append(i)
+        if raw.ch_names[i] in heart_chans:
+            heart_chan_inds.append(i)
+    
+    eeg_chan_inds = np.asarray(eeg_chan_inds)
+    heart_chan_inds = np.asarray(heart_chan_inds)             
+    
+    return eeg_chan_inds, heart_chan_inds 
+              
+
+              

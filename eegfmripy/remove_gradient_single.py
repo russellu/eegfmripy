@@ -81,9 +81,9 @@ def isolate_frequencies(data,midfreq,fs):
 
 # define function for finding start of TS given number of dummies (for aligning with FMRI)
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
+montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_hcp/')
 raw = mne.io.read_raw_brainvision(
-        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
+        '/media/sf_hcp/sleepdata/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
         montage=montage,eog=['ECG','ECG1'])
 
 graddata = raw.get_data()
