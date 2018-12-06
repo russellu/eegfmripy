@@ -12,7 +12,7 @@ from scipy import stats
 def sort_heart_components(raw):
     raw.filter(1,90)
     ica = ICA(n_components=60, method='fastica')
-    ica.fit(raw)
+    ica.fit(raw,decim=4)
     src = ica.get_sources(raw)
     srcdata = src.get_data()
     skew_l = 700

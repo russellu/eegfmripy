@@ -15,13 +15,19 @@ def read_vmrk(path):
     
     event_ids = []
     event_lats = []
+    event_labs = []
     for line in content:
         if line[0:2] == 'Mk':
             a = line.split(',')
             event_ids.append(a[1])
             event_lats.append(int(a[2]))
             
-    return event_ids, event_lats
+            lab = a[0]
+            eq_split = lab.split('=')
+            event_labs.append(eq_split[1])
+            
+            
+    return event_ids, event_lats, event_labs
 
 
 """
@@ -55,12 +61,8 @@ def create_raw_mne(data, ch_names, ch_types, montage):
 """
 prepare_raw_channel_info
 """
-def prepare_raw_channel_info(downsampled, raw, montage, bads):
-    
-    eeg_inds = np.arange(0,downsampled.shape[0])
-    
-    eeg_inds = np.delete(eeg_inds, bads)
-    
+def prepare_raw_channel_info(downsampled, raw, montage,eeg_inds):
+            
     newinds = np.zeros(eeg_inds.shape)
     positions = np.zeros([eeg_inds.shape[0],2])
     for i in np.arange(0,eeg_inds.shape[0]):    
@@ -77,7 +79,7 @@ def prepare_raw_channel_info(downsampled, raw, montage, bads):
 
 
 def montage_path():
-    return '/media/sf_shared/standard-10-5-cap385.elp'
+    return '/media/sf_hcp/standard-10-5-cap385.elp'
 
 def test_data_path():
     return '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr'
@@ -89,6 +91,7 @@ def trig_info(event_ids, event_lats, trig_name):
     event_lats = np.array(event_lats)
     trig_inds = [index for index, value in enumerate(event_ids) if value == trig_name]
     trig_inds = np.array(trig_inds)
+    print(trig_inds.shape)
     trig_lats = event_lats[trig_inds]
     
     return trig_inds, trig_lats
@@ -99,15 +102,21 @@ check_vol_triggers
 def check_vol_triggers(n_volumes, grad_inds):
     if n_volumes == grad_inds.shape[0]:
         print('#volumes matches #volume trigs')
+              
+        return True 
     else:
         print('WARNING: #volumes does not match #volume trigs')
         print('#volumes = ' + str(n_volumes))
         print('#volume trigs = ' + str(grad_inds.shape[0]))
+        print('will use # volumes to trim EEG data')
               
+        return False
+  
+
+    
 """
 isolate_eeg_channels
 get the EEG and ECG channels indices from the montage in two separate arrays
-
 """
 def isolate_eeg_channels(raw, montage):
 
