@@ -1,6 +1,7 @@
 import nibabel as nib 
 import mne as mne
 import numpy as np
+from scipy.stats import gamma
 
 """
 read .vmrk file, get all unique events, and return the following lists
@@ -137,4 +138,24 @@ def isolate_eeg_channels(raw, montage):
     return eeg_chan_inds, heart_chan_inds 
               
 
-              
+"""
+get_hrf
+"""
+def get_hrf(times):
+    peak_values = gamma.pdf(times, 6)
+    undershoot_values = gamma.pdf(times, 12)
+    values = peak_values - 0.35 * undershoot_values
+    return values / np.max(values) * 0.6
+
+
+
+
+
+
+
+
+
+
+
+
+
