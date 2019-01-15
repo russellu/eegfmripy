@@ -3,12 +3,15 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 import os 
+import logging
 
 from ..cli import AnalysisParser
 
+log = logging.getLogger('eegfmripy')
+
 
 def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
-    print("getting slice gap...")
+    log.info("getting slice gap...")
     mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
     icount = 0
     for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
@@ -19,7 +22,9 @@ def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
     return np.argmax(mcorrs[np.int(wsize/2)+maxcorr_pad:]) + maxcorr_pad
 
 def get_slicepochs(single_channel, slicegap):
-    print("epoching slices...")
+    log.info(
+        "epoching slices with parameters => slicegap={}, highpass={}".format(slicegap, highpass)
+    )
     nepochs = np.int(single_channel.shape[0] / slicegap)
     slice_epochs = np.zeros([nepochs, slicegap])
     slice_inds = np.zeros([nepochs,slicegap])
@@ -33,7 +38,7 @@ def get_slicepochs(single_channel, slicegap):
     return slice_epochs, slice_inds
 
 def find_bad_slices(slice_epochs, corrthresh=0.9):
-    print("finding bad slices (slices without gradient artifacts)")
+    log.info("finding bad slices (slices without gradient artifacts)")
     corrmat = np.corrcoef(slice_epochs)
     mean_corrmat = np.mean(corrmat,axis=1)
     
