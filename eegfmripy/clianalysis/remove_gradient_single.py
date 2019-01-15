@@ -6,6 +6,7 @@ import os
 import logging
 
 from ..cli import AnalysisParser
+from ..utils.general_utils import write_same_line, finish_same_line
 
 log = logging.getLogger('eegfmripy')
 
@@ -22,9 +23,6 @@ def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
     return np.argmax(mcorrs[np.int(wsize/2)+maxcorr_pad:]) + maxcorr_pad
 
 def get_slicepochs(single_channel, slicegap):
-    log.info(
-        "epoching slices with parameters => slicegap={}, channel-shape={}".format(slicegap, single_channel.shape)
-    )
     nepochs = np.int(single_channel.shape[0] / slicegap)
     slice_epochs = np.zeros([nepochs, slicegap])
     slice_inds = np.zeros([nepochs,slicegap])
@@ -113,13 +111,15 @@ def run(args=None, config=None):
     slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
     good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(slice_epochs, corrthresh=0.9)
 
+    log.info("Epoching slices...total runs: {}".format(graddata.shape[0]))
     for i in np.arange(0,graddata.shape[0]):
+        write_same_line(str(i+1) + "/{}".format(graddata.shape[0]))
         highpass, lowpass = isolate_frequencies(graddata[i,:], 2, 5000)
         slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
         slice_epochs = replace_bad_slices(slice_epochs, good_epoch_inds, bad_epoch_inds)
         graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
                 corrmat_thresh, graddata.shape[1]) + lowpass
-
+    finish_same_line()
     '''
     TODO: Output information about how to interpret the results.
     '''
