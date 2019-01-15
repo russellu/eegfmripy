@@ -23,7 +23,7 @@ def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
 
 def get_slicepochs(single_channel, slicegap):
     log.info(
-        "epoching slices with parameters => slicegap={}, highpass={}".format(slicegap, highpass)
+        "epoching slices with parameters => slicegap={}, channel-shape={}".format(slicegap, single_channel.shape)
     )
     nepochs = np.int(single_channel.shape[0] / slicegap)
     slice_epochs = np.zeros([nepochs, slicegap])
@@ -126,3 +126,6 @@ def run(args=None, config=None):
 
     fft = np.abs(np.fft.fft(graddata[3,50000:graddata.shape[1]-50000]))
     plt.plot(fft)
+
+    log.info("Close figures to end analysis.")
+    plt.show()
