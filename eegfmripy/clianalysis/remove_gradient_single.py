@@ -2,9 +2,17 @@ import mne as mne
 import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
+import os 
+import logging
+
+from ..cli import AnalysisParser
+from ..utils.general_utils import write_same_line, finish_same_line
+
+log = logging.getLogger('eegfmripy')
+
 
 def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
-    print("getting slice gap...")
+    log.info("getting slice gap...")
     mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
     icount = 0
     for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
@@ -15,7 +23,6 @@ def get_slicegap(single_channel, wsize=25000, maxcorr_pad=50):
     return np.argmax(mcorrs[np.int(wsize/2)+maxcorr_pad:]) + maxcorr_pad
 
 def get_slicepochs(single_channel, slicegap):
-    print("epoching slices...")
     nepochs = np.int(single_channel.shape[0] / slicegap)
     slice_epochs = np.zeros([nepochs, slicegap])
     slice_inds = np.zeros([nepochs,slicegap])
@@ -29,7 +36,7 @@ def get_slicepochs(single_channel, slicegap):
     return slice_epochs, slice_inds
 
 def find_bad_slices(slice_epochs, corrthresh=0.9):
-    print("finding bad slices (slices without gradient artifacts)")
+    log.info("finding bad slices (slices without gradient artifacts)")
     corrmat = np.corrcoef(slice_epochs)
     mean_corrmat = np.mean(corrmat,axis=1)
     
@@ -81,33 +88,45 @@ def isolate_frequencies(data,midfreq,fs):
 
 # define function for finding start of TS given number of dummies (for aligning with FMRI)
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_hcp/')
-raw = mne.io.read_raw_brainvision(
-        '/media/sf_hcp/sleepdata/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
-        montage=montage,eog=['ECG','ECG1'])
+def run(args=None, config=None):
+    parser = AnalysisParser('config')
+    args = parser.parse_analysis_args(args)
+    config = args.config
 
-graddata = raw.get_data()
+    montage_path = config['montage_path']
+    raw_vhdr = config['raw_vhdr']
 
-slice_gap = get_slicegap(graddata[3,:])
-slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
-good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(slice_epochs, corrthresh=0.9)
+    root, fname = os.path.split(montage_path)
 
-for i in np.arange(0,graddata.shape[0]):
-    highpass, lowpass = isolate_frequencies(graddata[i,:], 2, 5000)
-    slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
-    slice_epochs = replace_bad_slices(slice_epochs, good_epoch_inds, bad_epoch_inds)
-    graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
-            corrmat_thresh, graddata.shape[1]) + lowpass
+    montage = mne.channels.read_montage(fname, path=root)
+    raw = mne.io.read_raw_brainvision(
+        raw_vhdr,
+        montage=montage,
+        eog=['ECG','ECG1']
+    )
 
-fft = np.abs(np.fft.fft(graddata[3,50000:graddata.shape[1]-50000]))
-plt.plot(fft)
+    graddata = raw.get_data()
 
+    slice_gap = get_slicegap(graddata[3,:])
+    slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
+    good_epoch_inds, bad_epoch_inds, corrmat_thresh = find_bad_slices(slice_epochs, corrthresh=0.9)
 
+    log.info("Epoching slices...total runs: {}".format(graddata.shape[0]))
+    for i in np.arange(0,graddata.shape[0]):
+        write_same_line(str(i+1) + "/{}".format(graddata.shape[0]))
+        highpass, lowpass = isolate_frequencies(graddata[i,:], 2, 5000)
+        slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
+        slice_epochs = replace_bad_slices(slice_epochs, good_epoch_inds, bad_epoch_inds)
+        graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
+                corrmat_thresh, graddata.shape[1]) + lowpass
+    finish_same_line()
+    '''
+    TODO: Output information about how to interpret the results.
+    '''
 
+    fft = np.abs(np.fft.fft(graddata[3,50000:graddata.shape[1]-50000]))
+    plt.plot(fft)
 
-
-
-
-
-
+    log.info("Close figures to end analysis.")
+    plt.show()
 

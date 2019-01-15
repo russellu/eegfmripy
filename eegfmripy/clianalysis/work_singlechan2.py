@@ -6,6 +6,9 @@ from scipy import spatial
 import mne as mne
 from scipy import stats
 
+from ..cli import AnalysisParser
+
+
 def epoch_gradient_slices(single_channel, slicegap):
     print("epoching slices...")
     nepochs = np.int(single_channel.shape[0] / slicegap)
@@ -147,39 +150,45 @@ def get_slice_timing(single_channel, wsize=15000):
     
     return slice_gap
 
-#dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
-#dat0 = dat0[0:10000000]
 
-from TestsEEGFMRI import example_raw
-raw = example_raw()
+def run(args=None, config=None):
+    parser = AnalysisParser('config')
+    args = parser.parse_analysis_args(args)
+    config = args.config
 
-graddata = raw.get_data()[0:64,:]
+    #dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
+    #dat0 = dat0[0:10000000]
 
-for gd in np.arange(0,graddata.shape[0]):
-    dat0 = graddata[gd,:]
-    hp, lp = isolate_frequencies(dat0,2,5000)
-    single_channel = hp
-    slice_gap = get_slice_timing(single_channel)
-    slice_epochs, slice_inds = epoch_gradient_slices(hp, slice_gap)
-    offset = get_offset(slice_epochs)
-    
-    new_ts = average_artifact_subtraction(slice_epochs, slice_inds, offset)
-    new_ts = remove_gap(new_ts, slice_inds)
-    new_ts = isolate_frequencies(new_ts,2,5000)[0]
-    new_ts = interpolate_saturated_points(slice_epochs, slice_inds, new_ts)
-    new_ts = new_ts + lp
-    graddata[gd,:] = new_ts 
-    
-    print(gd)
+    from ..tests.TestsEEGFMRI import example_raw
+    raw = example_raw()
+
+    graddata = raw.get_data()[0:64,:]
+
+    for gd in np.arange(0,graddata.shape[0]):
+        dat0 = graddata[gd,:]
+        hp, lp = isolate_frequencies(dat0,2,5000)
+        single_channel = hp
+        slice_gap = get_slice_timing(single_channel)
+        slice_epochs, slice_inds = epoch_gradient_slices(hp, slice_gap)
+        offset = get_offset(slice_epochs)
+        
+        new_ts = average_artifact_subtraction(slice_epochs, slice_inds, offset)
+        new_ts = remove_gap(new_ts, slice_inds)
+        new_ts = isolate_frequencies(new_ts,2,5000)[0]
+        new_ts = interpolate_saturated_points(slice_epochs, slice_inds, new_ts)
+        new_ts = new_ts + lp
+        graddata[gd,:] = new_ts 
+        
+        print(gd)
 
 
-chan1 = signal.decimate(graddata[0,:],20)
-dec_chans = np.zeros([graddata.shape[0],chan1.shape[0]])
-for i in np.arange(1,graddata.shape[0]):    
-    dec_chans[i,:] = signal.decimate(graddata[i,:],20)
-    print(i)
+    chan1 = signal.decimate(graddata[0,:],20)
+    dec_chans = np.zeros([graddata.shape[0],chan1.shape[0]])
+    for i in np.arange(1,graddata.shape[0]):    
+        dec_chans[i,:] = signal.decimate(graddata[i,:],20)
+        print(i)
 
-np.save('dec_chans',dec_chans)
+    np.save('dec_chans',dec_chans)
 
 
 
