@@ -2,8 +2,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import mne
+import gc
 from mne.datasets import sample
 from mne.minimum_norm import make_inverse_operator, apply_inverse
+
+'''
+TODO: Use pytest for testing.
+TODO: Store all testing data in-tree.
+'''
+
 
 data_path = sample.data_path()
 raw_fname = data_path + '/MEG/sample/sample_audvis_filt-0-40_raw.fif'
@@ -37,6 +44,7 @@ evoked.plot_topomap(times=np.linspace(0.05, 0.15, 5), ch_type='mag',
 evoked.plot_white(noise_cov, time_unit='s')
 
 del epochs  # to save memory
+gc.collect() # Force gc to clear some memory
 
 # Read the forward solution and compute the inverse operator
 fname_fwd = data_path + '/MEG/sample/sample_audvis-meg-oct-6-fwd.fif'
@@ -47,6 +55,7 @@ info = evoked.info
 inverse_operator = make_inverse_operator(info, fwd, noise_cov,
                                          loose=0.2, depth=0.8)
 del fwd
+gc.collect() # Force gc to clear some memory
 
 # You can write it to disk with::
 #
