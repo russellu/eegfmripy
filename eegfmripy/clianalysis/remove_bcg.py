@@ -15,7 +15,7 @@ from ..cli import AnalysisParser
 def sort_heart_components(raw):
     raw.filter(1,90)
     ica = ICA(n_components=60, method='fastica')
-    ica.fit(raw)
+    ica.fit(raw,decim=4)
     src = ica.get_sources(raw)
     srcdata = src.get_data()
     skew_l = 700
@@ -56,7 +56,7 @@ def remove_bad_peaks(heartdata, peak_inds):
     
     return peak_inds
 
-def get_heartrate(heartdata, peak_inds):
+def get_heartrate(raw, heartdata, peak_inds):
     averaging_window_l = 15 
     samples_window_l = int(raw.info['sfreq'] * averaging_window_l)
     mean_hr = (raw.info['sfreq'] / np.mean(np.diff(peak_inds))) * 60
@@ -70,7 +70,7 @@ def get_heartrate(heartdata, peak_inds):
     
     return mean_hr, hr_ts
 
-def epoch_channel_heartbeats(hp_raw_data, mean_hr, sfreq):
+def epoch_channel_heartbeats(hp_raw_data, mean_hr, peak_inds, sfreq):
     
     epochl = int((1/(mean_hr/60)) * sfreq)
     print(epochl)
@@ -82,7 +82,7 @@ def epoch_channel_heartbeats(hp_raw_data, mean_hr, sfreq):
     bcg_inds = np.zeros([peak_inds.shape[0],epochl])
     icount = 0
     for ind in peak_inds:
-        if (ind-halfepochl >= 0) & (ind + halfepochl <= heartdata.shape[1]):
+        if (ind-halfepochl >= 0) & (ind + halfepochl <= hp_raw_data.shape[1]):
             bcg_epochs[:,icount,:] = hp_raw_data[:,ind-halfepochl:ind+halfepochl]
             bcg_inds[icount,:] = np.arange(ind-halfepochl,ind+halfepochl) 
         icount = icount + 1            
@@ -143,50 +143,3 @@ def run(args=None, config=None):
     parser = AnalysisParser('config')
     args = parser.parse_analysis_args(args)
     config = args.config
-
-    montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_E_DRIVE/')
-    raw = mne.io.read_raw_eeglab('/media/sf_E_DRIVE/badger_eeg/tegan/gradeeg_retino_rest.set',montage=montage,eog=[31])
-    raw.load_data()
-    raw_data = raw.get_data()[0:64,:] 
-    hp_raw_data = mne.filter.filter_data(raw_data,250,1,124)
-    heartdata = sort_heart_components(raw)
-
-    peak_inds = get_heartbeat_peaks(heartdata[0,:])
-    peak_inds = remove_bad_peaks(heartdata[0,:], peak_inds)
-
-    mean_hr, hr_ts = get_heartrate(heartdata[0,:],peak_inds)
-    bcg_epochs, bcg_inds = epoch_channel_heartbeats(hp_raw_data, int(mean_hr*0.95), raw.info['sfreq'])
-    shifted_epochs, shifted_inds = align_heartbeat_peaks(bcg_epochs, bcg_inds)
-    subbed_raw = subtract_heartbeat_artifacts(raw_data, shifted_epochs, shifted_inds)
-
-        
-        
-
-    """
-    vlines = np.zeros([heartdata.shape[1]])
-    vlines[peak_inds] = 1
-    vlines[peak_inds[bades]] = 5
-    plt.plot(heartdata[0,:]) ; plt.plot(vlines)     
-
-    vlines = np.zeros([heartdata.shape[1]])
-    vlines[peak_inds] = 1
-    plt.plot(heartdata[0,:]) ; plt.plot(vlines)     
-    plt.imshow(bcg_epochs[45,:,:])
-    """
-
-    ch_types = []
-    ch_names = []
-    inds = np.arange(0,64)
-    for i in np.arange(0,64):
-        ch_types.append('eeg')
-        ch_names.append(raw.ch_names[inds[i]])
-
-    info = mne.create_info(ch_names=ch_names,ch_types=ch_types,sfreq=250)
-    newraw = mne.io.RawArray(subbed_raw,info)
-    newraw.set_montage(montage)
-    newraw.filter(1,120)
-    ica2 = ICA(n_components=60, method='fastica', random_state=23)
-    ica2.fit(newraw)
-    ica2.plot_components(picks=np.arange(0,60))
-
-    plt.plot(raw_data[3,:]); plt.plot(subbed_raw[3,:])

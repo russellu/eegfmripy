@@ -129,3 +129,4 @@ def run(args=None, config=None):
 
     log.info("Close figures to end analysis.")
     plt.show()
+
