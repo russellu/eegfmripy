@@ -2,6 +2,7 @@ import mne as mne
 import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
+import os 
 
 from ..cli import AnalysisParser
 
@@ -89,10 +90,17 @@ def run(args=None, config=None):
     args = parser.parse_analysis_args(args)
     config = args.config
 
-    montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
+    montage_path = config['montage_path']
+    raw_vhdr = config['raw_vhdr']
+
+    root, fname = os.path.split(montage_path)
+
+    montage = mne.channels.read_montage(fname, path=root)
     raw = mne.io.read_raw_brainvision(
-            '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
-            montage=montage,eog=['ECG','ECG1'])
+        raw_vhdr,
+        montage=montage,
+        eog=['ECG','ECG1']
+    )
 
     graddata = raw.get_data()
 
@@ -107,15 +115,9 @@ def run(args=None, config=None):
         graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
                 corrmat_thresh, graddata.shape[1]) + lowpass
 
+    '''
+    TODO: Output information about how to interpret the results.
+    '''
+
     fft = np.abs(np.fft.fft(graddata[3,50000:graddata.shape[1]-50000]))
     plt.plot(fft)
-
-
-
-
-
-
-
-
-
-
