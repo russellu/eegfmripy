@@ -10,6 +10,10 @@ from ..cli import AnalysisParser
 
 
 def run(args=None, config=None):
+    parser = AnalysisParser('config')
+    args = parser.parse_analysis_args(args)
+    config = args.config
+
 	print(__doc__)
 
 	data_path = sample.data_path()

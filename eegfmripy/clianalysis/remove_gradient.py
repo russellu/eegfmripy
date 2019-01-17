@@ -3,6 +3,8 @@ import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
 
+from ..cli import AnalysisParser
+
 def get_slicegap(graddata, wsize=25000, maxcorr_pad=50):
     print("getting slice gap...")
     mcorrs = np.zeros([wsize,np.int(graddata.shape[1]/wsize)])
@@ -65,23 +67,26 @@ def subtract_gradient(slice_epochs, slice_inds, corrmat_thresh, window_sz=60, wi
             
     return subbed_ts
 
+def run(args=None, config=None):
+    parser = AnalysisParser('config')
+    args = parser.parse_analysis_args(args)
+    config = args.config
 
-# define function for finding start of TS given number of dummies (for aligning with FMRI)
+    # define function for finding start of TS given number of dummies (for aligning with FMRI)
+    montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
+    raw = mne.io.read_raw_brainvision(
+            '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
+            montage=montage,eog=['ECG','ECG1'])
 
-montage = mne.channels.read_montage('standard-10-5-cap385',path='/media/sf_shared/')
-raw = mne.io.read_raw_brainvision(
-        '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr',
-        montage=montage,eog=['ECG','ECG1'])
+    graddata = raw.get_data()
 
-graddata = raw.get_data()
+    slicegap = get_slicegap(graddata)
+    slice_epochs, slice_inds = get_slicepochs(graddata, slicegap)
+    slice_epochs, corrmat_thresh = remove_nongradient_epochs(slice_epochs)
+    subbed_ts = subtract_gradient(slice_epochs, slice_inds, corrmat_thresh)
 
-slicegap = get_slicegap(graddata)
-slice_epochs, slice_inds = get_slicepochs(graddata, slicegap)
-slice_epochs, corrmat_thresh = remove_nongradient_epochs(slice_epochs)
-subbed_ts = subtract_gradient(slice_epochs, slice_inds, corrmat_thresh)
-
-fft = np.abs(np.fft.fft(subbed_ts[3,50000:subbed_ts.shape[1]-50000]))
-plt.plot(fft)
+    fft = np.abs(np.fft.fft(subbed_ts[3,50000:subbed_ts.shape[1]-50000]))
+    plt.plot(fft)
 
 
 

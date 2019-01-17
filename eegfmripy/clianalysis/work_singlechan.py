@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import collections
 
+from ..cli import AnalysisParser
+
 def get_slicepochs(single_channel, slicegap):
     print("epoching slices...")
     nepochs = np.int(single_channel.shape[0] / slicegap)
@@ -82,108 +84,113 @@ def epoch_timeseries(timeseries, window_length):
 def fit_func(x, a):
     return a*x
 
-dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
-dat0 = dat0[1:12000000]
+def run(args=None, config=None):
+    parser = AnalysisParser('config')
+    args = parser.parse_analysis_args(args)
+    config = args.config
 
-hp, lp = isolate_frequencies(dat0,2,5000)
+    dat0 = np.load('/media/sf_shared/graddata/graddata_0.npy')
+    dat0 = dat0[1:12000000]
 
-wsize=15000
-single_channel = hp 
-mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
-icount = 0
-for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
-    mcorrs[:,icount] = signal.correlate(single_channel[i:i+wsize],single_channel[i:i+wsize], mode='same')
-    icount = icount + 1
-    
-mcorrs = np.mean(mcorrs,axis=1)
-slice_gap = np.argmax(mcorrs[np.int(wsize/2)+50:]) + 50
-slice_epochs, slice_inds = get_slicepochs(hp, slice_gap)
+    hp, lp = isolate_frequencies(dat0,2,5000)
 
-peak_grad = np.argmax(np.diff(np.mean(slice_epochs,axis=0)))
-shift_ts = slice_epochs[:,peak_grad]
-shift_epoch = epoch_timeseries(shift_ts, slice_gap*5)
-shift_xcorrs = np.zeros(shift_epoch.shape)
-for i in np.arange(0,shift_epoch.shape[0]):
-    shift_xcorrs[i,:] = signal.correlate(shift_epoch[i,:],shift_epoch[i,:],mode='same')
-
-mean_xcorrs = np.mean(shift_xcorrs,axis=0)
-
-maxinds = np.where(np.r_[True, mean_xcorrs[1:] > mean_xcorrs[:-1]] 
-        & np.r_[mean_xcorrs[:-1] > mean_xcorrs[1:], True])
-
-
-offset = int(np.median(np.diff(maxinds)))
-new_ts = np.zeros(dat0.shape)
-avg_epochs = np.zeros(slice_epochs.shape)
-for ofst in np.arange(0,offset):   
-    epochs_i = slice_epochs[ofst::40,:]       
-    max_dist = 800
-    if max_dist >= epochs_i.shape[0]:
-        max_dist = epochs_i.shape[0] 
+    wsize=15000
+    single_channel = hp 
+    mcorrs = np.zeros([wsize,np.int(single_channel.shape[0]/wsize)])
+    icount = 0
+    for i in np.arange(0, single_channel.shape[0] - wsize - 1, wsize):
+        mcorrs[:,icount] = signal.correlate(single_channel[i:i+wsize],single_channel[i:i+wsize], mode='same')
+        icount = icount + 1
         
-    sort_diffs = np.zeros([epochs_i.shape[0], max_dist])
+    mcorrs = np.mean(mcorrs,axis=1)
+    slice_gap = np.argmax(mcorrs[np.int(wsize/2)+50:]) + 50
+    slice_epochs, slice_inds = get_slicepochs(hp, slice_gap)
 
-    for i in np.arange(0,epochs_i.shape[0]):      
-        closest_inds = np.where(np.abs(i - np.arange(0,epochs_i.shape[0])) < max_dist)[0]
+    peak_grad = np.argmax(np.diff(np.mean(slice_epochs,axis=0)))
+    shift_ts = slice_epochs[:,peak_grad]
+    shift_epoch = epoch_timeseries(shift_ts, slice_gap*5)
+    shift_xcorrs = np.zeros(shift_epoch.shape)
+    for i in np.arange(0,shift_epoch.shape[0]):
+        shift_xcorrs[i,:] = signal.correlate(shift_epoch[i,:],shift_epoch[i,:],mode='same')
+
+    mean_xcorrs = np.mean(shift_xcorrs,axis=0)
+
+    maxinds = np.where(np.r_[True, mean_xcorrs[1:] > mean_xcorrs[:-1]] 
+            & np.r_[mean_xcorrs[:-1] > mean_xcorrs[1:], True])
+
+
+    offset = int(np.median(np.diff(maxinds)))
+    new_ts = np.zeros(dat0.shape)
+    avg_epochs = np.zeros(slice_epochs.shape)
+    for ofst in np.arange(0,offset):   
+        epochs_i = slice_epochs[ofst::40,:]       
+        max_dist = 800
+        if max_dist >= epochs_i.shape[0]:
+            max_dist = epochs_i.shape[0] 
+            
+        sort_diffs = np.zeros([epochs_i.shape[0], max_dist])
+
+        for i in np.arange(0,epochs_i.shape[0]):      
+            closest_inds = np.where(np.abs(i - np.arange(0,epochs_i.shape[0])) < max_dist)[0]
+            
+            if closest_inds.shape[0] > max_dist:
+                closest_inds = closest_inds[0:max_dist]
+            
+            smallest_ind = np.min(closest_inds)
+            largest_ind = np.max(closest_inds)
+            
+            diffs_i = (np.tile(epochs_i[[i],:],(closest_inds.shape[0],1)) 
+                    - epochs_i[smallest_ind:largest_ind+1,:])
+            
+            sumdiffs = np.sum(np.abs(diffs_i),axis=1)
+            sort_diffs[i,:] = np.argsort(sumdiffs) + smallest_ind
+              
+        current_slice_inds = slice_inds[ofst::40,:]
+        inds_i = np.arange(ofst,slice_epochs.shape[0],40)
+        sort_diffs = sort_diffs.astype(int) 
+        sub_epochs = np.zeros(epochs_i.shape)
         
-        if closest_inds.shape[0] > max_dist:
-            closest_inds = closest_inds[0:max_dist]
+        for i in np.arange(0, sort_diffs.shape[0]):
+            template_i = np.mean(epochs_i[sort_diffs[i,1:50],:],axis=0)
+            params = curve_fit(fit_func, template_i, epochs_i[i,:])
+            fit_artifact = template_i*params[0][0] #+ params[0][1]
+            fit_artifact = template_i
+            sub_epochs[i,:] = epochs_i[i,:] - fit_artifact
+            new_ts[current_slice_inds[i,:]] = sub_epochs[i,:]
+            avg_epochs[inds_i[i],:] = template_i 
+            
+        print(ofst)
+
+    temp_avgs = np.zeros(avg_epochs.shape)
+    temp_avgs[0,:] = avg_epochs[0,:]
+    diffs = np.zeros(avg_epochs.shape[0])
+    subbed_epochs = np.zeros(avg_epochs.shape)
+    new_ts2 = np.zeros(dat0.shape)    
+    for i in np.arange(0,avg_epochs.shape[0]-1):
+        new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:]
+        subbed_epochs[i,:] = slice_epochs[i,:] - avg_epochs[i,:]
+        diffs[i] = new_ts2[slice_inds[i,0]] - new_ts2[slice_inds[i-1,slice_inds.shape[1]-1]]
+        new_ts2[slice_inds[i,:]] = new_ts2[slice_inds[i,:]] - diffs[i]
+
+    #plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
+
+    hp2,lp2 = isolate_frequencies(new_ts2,2,5000)
+    plt.plot(hp2 + lp); plt.plot(new_ts + (np.mean(hp2) - np.mean(new_ts)))
+
+    max_epochs = np.argmax(slice_epochs, axis=1)
+    counts = collections.Counter(max_epochs)
+
+
+    """
+    vline = np.zeros(new_ts.shape)
+    vline[slice_inds[:,0]] = 1
+     
+    new_ts2 = np.zeros(dat0.shape)    
+    for i in np.arange(0,slice_inds.shape[0]):
+        new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:] - diffs[i]
         
-        smallest_ind = np.min(closest_inds)
-        largest_ind = np.max(closest_inds)
+    plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
+    """
         
-        diffs_i = (np.tile(epochs_i[[i],:],(closest_inds.shape[0],1)) 
-                - epochs_i[smallest_ind:largest_ind+1,:])
-        
-        sumdiffs = np.sum(np.abs(diffs_i),axis=1)
-        sort_diffs[i,:] = np.argsort(sumdiffs) + smallest_ind
-          
-    current_slice_inds = slice_inds[ofst::40,:]
-    inds_i = np.arange(ofst,slice_epochs.shape[0],40)
-    sort_diffs = sort_diffs.astype(int) 
-    sub_epochs = np.zeros(epochs_i.shape)
-    
-    for i in np.arange(0, sort_diffs.shape[0]):
-        template_i = np.mean(epochs_i[sort_diffs[i,1:50],:],axis=0)
-        params = curve_fit(fit_func, template_i, epochs_i[i,:])
-        fit_artifact = template_i*params[0][0] #+ params[0][1]
-        fit_artifact = template_i
-        sub_epochs[i,:] = epochs_i[i,:] - fit_artifact
-        new_ts[current_slice_inds[i,:]] = sub_epochs[i,:]
-        avg_epochs[inds_i[i],:] = template_i 
-        
-    print(ofst)
-
-temp_avgs = np.zeros(avg_epochs.shape)
-temp_avgs[0,:] = avg_epochs[0,:]
-diffs = np.zeros(avg_epochs.shape[0])
-subbed_epochs = np.zeros(avg_epochs.shape)
-new_ts2 = np.zeros(dat0.shape)    
-for i in np.arange(0,avg_epochs.shape[0]-1):
-    new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:]
-    subbed_epochs[i,:] = slice_epochs[i,:] - avg_epochs[i,:]
-    diffs[i] = new_ts2[slice_inds[i,0]] - new_ts2[slice_inds[i-1,slice_inds.shape[1]-1]]
-    new_ts2[slice_inds[i,:]] = new_ts2[slice_inds[i,:]] - diffs[i]
-
-#plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
-
-hp2,lp2 = isolate_frequencies(new_ts2,2,5000)
-plt.plot(hp2 + lp); plt.plot(new_ts + (np.mean(hp2) - np.mean(new_ts)))
-
-max_epochs = np.argmax(slice_epochs, axis=1)
-counts = collections.Counter(max_epochs)
-
-
-"""
-vline = np.zeros(new_ts.shape)
-vline[slice_inds[:,0]] = 1
- 
-new_ts2 = np.zeros(dat0.shape)    
-for i in np.arange(0,slice_inds.shape[0]):
-    new_ts2[slice_inds[i,:]] = slice_epochs[i,:] - avg_epochs[i,:] - diffs[i]
-    
-plt.plot(new_ts2[1068850:1069000]); plt.plot(new_ts2[2873800:2874000]); 
-"""
-    
     
     
