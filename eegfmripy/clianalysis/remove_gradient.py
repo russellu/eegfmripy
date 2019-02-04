@@ -88,7 +88,9 @@ def run(args=None, config=None):
     fft = np.abs(np.fft.fft(subbed_ts[3,50000:subbed_ts.shape[1]-50000]))
     plt.plot(fft)
 
+    plt.plot()
 
+    plt.show()
 
 
 

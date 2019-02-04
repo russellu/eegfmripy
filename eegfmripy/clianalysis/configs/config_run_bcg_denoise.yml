@@ -1,0 +1,5 @@
+montage_path: "C:/Users/greg/Documents/masters/matlab_extensions/eeglab14_1_1b/plugins/dipfit2.3/standard_BESA/standard-10-5-cap385.elp"
+raw_gradrem_fif: "C:/Users/greg/Documents/masters/subjects/SC/eeg-fmri/eeg/gradientremoved_1549157998anticip_1206sc03_01_005.fif"
+
+output: "C:/Users/greg/Documents/masters/subjects/SC/eeg-fmri/eeg"
+debug-plot: False

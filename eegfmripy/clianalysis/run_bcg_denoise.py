@@ -3,18 +3,40 @@ import nibabel as nib
 import matplotlib.pyplot as plt 
 import numpy as np 
 import sys as sys
+import logging
+import os
+import time
 
-import remove_bcg
+from ..clianalysis import remove_bcg
 from ..utils import helpers
 from ..cli import AnalysisParser
 
-def run(args=None, config=None):
-    parser = AnalysisParser('config')
-    args = parser.parse_analysis_args(args)
-    config = args.config
+log = logging.getLogger("eegfmripy")
 
-    raw = mne.io.read_raw_fif('/media/sf_shared/graddata/new_raw.fif')
+
+def run(args=None, config=None):
+    if not config:
+        parser = AnalysisParser('config')
+        args = parser.parse_analysis_args(args)
+        config = args.config
+
+    montage_path = config['montage_path']
+    gradrem_path = config['raw_gradrem_fif']
+    output = config['output']
+
+    debug_plot = False
+    if 'debug-plot' in config:
+        debug_plot = config['debug-plot']
+
+    raw = mne.io.read_raw_fif(gradrem_path)
     raw.load_data()
+    tmpdata = raw.get_data()
+
+    for t in range(tmpdata.shape[0]):
+        raw[t,:1790] = 0
+
+    raw = raw.copy().resample(250, npad='auto', verbose='error')
+    print("Srate: %s" % raw.info['sfreq'])
     heartdata = remove_bcg.sort_heart_components(raw)
 
     """
@@ -43,8 +65,9 @@ def run(args=None, config=None):
 
     chunk_size = 50000
     all_peak_inds = np.zeros(0)
+    log.info("Gathering peak inds..")
     for i in np.arange(0,heartdata.shape[1], chunk_size):
-        print(i)
+        log.info("On chunk starting from %s" % str(i))
         if i+chunk_size < heartdata.shape[1]:
             peak_inds = remove_bcg.get_heartbeat_peaks(heartdata[0,i:i+chunk_size]) + i
             new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
@@ -60,14 +83,37 @@ def run(args=None, config=None):
 
     all_peak_inds = all_peak_inds.astype(int)
     peak_arr = np.zeros(heartdata.shape[1])
-    peak_arr[all_peak_inds] = 1 
+    peak_arr[all_peak_inds] = 1
 
     peak_inds = remove_bcg.remove_bad_peaks(heartdata[0,:], all_peak_inds)
+    print(len(peak_inds))
+
+    plt.figure()
+    plt.plot(heartdata[0,:])
+    for i in peak_inds:
+        plt.axvline(x=i, color='black')
+    plt.show()
+
+    if debug_plot:
+        for t in range(heartdata.shape[0]):
+            plt.figure()
+            plt.plot(heartdata[t,:])
+            for i in peak_inds:
+                plt.axvline(x=i, color='black')
+            plt.show()
 
     mean_hr, hr_ts = remove_bcg.get_heartrate(raw,heartdata[0,:],peak_inds)
+    print("HR:")
+    print(mean_hr)
 
     bcg_epochs, bcg_inds = remove_bcg.epoch_channel_heartbeats(
             raw.get_data(), int(mean_hr*0.95), peak_inds, raw.info['sfreq'])
+
+    plt.figure()
+    print(bcg_epochs.shape)
+    plt.imshow(np.squeeze(bcg_epochs[3,:,:]))
+    plt.clim(-0.0001, 0.0001)
+    plt.show()
 
     shifted_epochs, shifted_inds = remove_bcg.align_heartbeat_peaks(
             bcg_epochs, bcg_inds)
@@ -75,15 +121,14 @@ def run(args=None, config=None):
     subbed_raw = remove_bcg.subtract_heartbeat_artifacts(
            raw.get_data(), shifted_epochs, shifted_inds)
 
-    bads = [raw.ch_names.index('STIM_GRAD')]
-    ch_names, ch_types, eeg_inds = helpers.prepare_raw_channel_info(
-            subbed_raw, raw, mne.channels.read_montage(helpers.montage_path()), bads)
+    new_raw = helpers.create_raw_mne(subbed_raw, raw.ch_names, ['eeg' for _ in range(len(raw.ch_names))],
+              mne.channels.read_montage(montage_path))
 
-    new_raw = helpers.create_raw_mne(subbed_raw[0:63,:], ch_names, ch_types,
-              mne.channels.read_montage(helpers.montage_path()))
+    fname = os.path.join(
+        output,
+        'bcgrem_gradrem_' + str(int(time.time())) + gradrem_path.split('/')[-1].split('.')[0] + '.fif'
+    )
 
-    save_path = '/media/sf_shared/graddata/bcg_denoised_raw.fif'
-
-    new_raw.save(save_path)
+    new_raw.save(fname)
 
 
