@@ -1,5 +1,6 @@
 import mne as mne
 import numpy as np
+import logging
 from scipy import signal
 from scipy.interpolate import griddata
 from scipy.cluster.vq import kmeans, vq
@@ -10,6 +11,9 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 from ..cli import AnalysisParser
+from ..utils.general_utils import write_same_line, finish_same_line
+
+log = logging.getLogger("eegfmripy")
 
 
 def sort_heart_components(raw):
@@ -29,16 +33,16 @@ def sort_heart_components(raw):
     neg_skews = np.where(np.mean(skews, axis=1) < 0) 
     skews[neg_skews,:] = skews[neg_skews,:] * -1 
     srcdata[neg_skews,:] = srcdata[neg_skews,:] * -1 
-    sort_skews_desc = np.flip(np.argsort(np.mean(skews, axis=1)))
-    
+    sort_skews_desc = np.flip(np.argsort(np.mean(skews, axis=1)), axis=0)
+
     return srcdata[sort_skews_desc,:]
 
-def get_heartbeat_peaks(peak_signal, peak_widths=[20,25,30,35,40,45]):
+def get_heartbeat_peaks(peak_signal, peak_widths=list(range(25,45))):
     peak_inds = signal.find_peaks_cwt(peak_signal, peak_widths)
     return peak_inds
 
-def remove_bad_peaks(heartdata, peak_inds):  
-    epochl = 150 
+def remove_bad_peaks(heartdata, peak_inds):
+    epochl = 150
     halfepochl = np.int(epochl/2)
     
     bcg_epochs = np.zeros([peak_inds.shape[0], epochl])
@@ -51,9 +55,9 @@ def remove_bad_peaks(heartdata, peak_inds):
     corrs = np.corrcoef(bcg_epochs)    
     corrs = np.nan_to_num(corrs)   
     zcorrs = stats.zscore(np.sum(corrs,axis=1))
-    badinds = np.where(zcorrs < -4.5)   
+    badinds = np.where(zcorrs < -4.3)   
     peak_inds = np.delete(peak_inds, badinds)
-    
+
     return peak_inds
 
 def get_heartrate(raw, heartdata, peak_inds):
@@ -67,13 +71,14 @@ def get_heartrate(raw, heartdata, peak_inds):
         hr_ts[i] = (np.sum(beat_ts[i-samples_window_l:i]) / averaging_window_l) * 60
     
     hr_ts[0:samples_window_l] = hr_ts[samples_window_l]
-    
+    print(mean_hr)
+    print(hr_ts)
     return mean_hr, hr_ts
 
 def epoch_channel_heartbeats(hp_raw_data, mean_hr, peak_inds, sfreq):
-    
+    print(sfreq)
     epochl = int((1/(mean_hr/60)) * sfreq)
-    print(epochl)
+    log.info("epoch_channel_heartbeats, epoch1:" + str(epochl))
     if epochl%2 == 1:
         epochl = epochl + 1
         
@@ -127,15 +132,15 @@ def align_heartbeat_peaks(bcg_epochs, bcg_inds):
 
 def subtract_heartbeat_artifacts(raw_data, shifted_epochs, shifted_inds, n_avgs=30):
     subbed_raw = raw_data.copy()
+    log.info("Total heartbeat epochs: %s" % str(shifted_epochs.shape[1]))
     for epoch in np.arange(0,shifted_epochs.shape[1]):
-        print(epoch)
-        rep_current = np.tile(shifted_epochs[:,[epoch],:],[1,shifted_epochs.shape[1],1])
-        rep_diffs = rep_current - shifted_epochs
-        mean_diffs = np.mean(np.abs(rep_diffs),axis=0)
+        write_same_line("subtract_heartbeat_artifacts, epoch:" + str(epoch))
+        rep_current = np.abs(np.tile(shifted_epochs[:,[epoch],:],[1,shifted_epochs.shape[1],1]) - shifted_epochs)
+        mean_diffs = np.mean(np.abs(rep_current),axis=0)
         sorted_epochs = np.argsort(np.mean(mean_diffs,axis=1))
-        subbed_raw[:,shifted_inds[epoch,:]]  = (raw_data[:,shifted_inds[epoch,:]] 
-        - np.mean(shifted_epochs[:,sorted_epochs[1:n_avgs]], axis=1))
-        
+        subbed_raw[:,shifted_inds[epoch,:]]  = (raw_data[:,shifted_inds[epoch,:]] - np.mean(shifted_epochs[:,sorted_epochs[1:n_avgs]], axis=1))
+    finish_same_line()
+
     return subbed_raw
 
 

@@ -10,8 +10,6 @@ from RemoveGradient import get_slice_epochs, get_slice_sample_len
 import sys
 from scipy import signal
 
-sys.path.insert(0, '/media/sf_shared/eegfmripy/eegfmripy/tests')
-
 
 """
 function: find the initial volume timing in the EEG signal, given the 
@@ -39,7 +37,7 @@ n_dummies = 3
 
 n_slice_artifacts = (n_volumes * n_slices) / mb_factor
 
-from TestsEEGFMRI import test_example_raw 
+from ..tests.TestsEEGFMRI import test_example_raw 
 raw = test_example_raw()
 graddata = raw.get_data(picks=[1])
 graddata = np.squeeze(graddata)

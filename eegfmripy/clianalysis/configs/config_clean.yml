@@ -2,5 +2,8 @@ montage_path: "C:/Users/greg/Documents/masters/matlab_extensions/eeglab14_1_1b/p
 raw_vhdr: "C:/Users/greg/Documents/masters/subjects/SC/eeg-fmri/eeg/anticip_1206sc03_01_005.vhdr"
 alignment_trigger_name: '80'
 slice_gradient_similarity_correlation:  0.9
+montage_path: "C:/Users/greg/Documents/masters/matlab_extensions/eeglab14_1_1b/plugins/dipfit2.3/standard_BESA/standard-10-5-cap385.elp"
 
+debug-plot: False
+display_ica_components: True
 output: "C:/Users/greg/Documents/masters/subjects/SC/eeg-fmri/eeg"

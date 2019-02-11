@@ -1,7 +1,10 @@
+import os
+
 import nibabel as nib 
 import mne as mne
 import numpy as np
 from scipy.stats import gamma
+
 
 """
 read .vmrk file, get all unique events, and return the following lists
@@ -51,8 +54,8 @@ def fmri_info(path):
 create_raw_mne: create a new mne 'raw' data structure from data, channel
 names, channel types, and montage
 """
-def create_raw_mne(data, ch_names, ch_types, montage):
-    info = mne.create_info(ch_names=ch_names,ch_types=ch_types,sfreq=250)
+def create_raw_mne(data, ch_names, ch_types, montage, sfreq=250):
+    info = mne.create_info(ch_names=ch_names,ch_types=ch_types,sfreq=sfreq)
     newraw = mne.io.RawArray(data,info)
     newraw.set_montage(montage)
     
@@ -60,9 +63,24 @@ def create_raw_mne(data, ch_names, ch_types, montage):
 
 
 """
+save_eeg: mne wrapper to save eeg data, get ch_names and ch_types
+from prepare_raw_channel_info(...)
+"""
+def save_eeg(data, ch_names, ch_types, fname, montagepath, **kwargs):
+    root, fname = os.path.split(montagepath)
+    new_raw = create_raw_mne(
+        data,
+        ch_names,
+        ch_types,
+        mne.channels.read_montage(fname, path=root)
+    )
+    new_raw.save(fname, **kwargs)
+
+
+"""
 prepare_raw_channel_info
 """
-def prepare_raw_channel_info(downsampled, raw, montage,eeg_inds):
+def prepare_raw_channel_info(downsampled, raw, montage, eeg_inds):
             
     newinds = np.zeros(eeg_inds.shape)
     positions = np.zeros([eeg_inds.shape[0],2])
@@ -79,11 +97,9 @@ def prepare_raw_channel_info(downsampled, raw, montage,eeg_inds):
     return ch_names, ch_types, eeg_inds
 
 
-def montage_path():
-    return '/media/sf_hcp/standard-10-5-cap385.elp'
-
 def test_data_path():
     return '/media/sf_shared/CoRe_011/eeg/CoRe_011_Day2_Night_01.vhdr'
+
 
 """
 trig_info
