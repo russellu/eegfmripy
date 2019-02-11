@@ -6,38 +6,42 @@ import sys as sys
 import logging
 import os
 import time
+import code
 
-from ..clianalysis import remove_bcg
+from mne.time_frequency import tfr_morlet
+from mne.preprocessing import ICA
+
+from ..clianalysis import remove_bcg as bcg_utils
 from ..utils import helpers
 from ..cli import AnalysisParser
 
 log = logging.getLogger("eegfmripy")
 
 
-def run(args=None, config=None):
-    if not config:
-        parser = AnalysisParser('config')
-        args = parser.parse_analysis_args(args)
-        config = args.config
+def remove_bcg(
+        raw,
+        montage_path,
+        output=os.getcwd(),
+        debug_plot=False,
+        bcg_peak_widths=list(range(25,45)),
+        display_ica_components=False
+    ):
 
-    montage_path = config['montage_path']
-    gradrem_path = config['raw_gradrem_fif']
-    output = config['output']
-
-    debug_plot = False
-    if 'debug-plot' in config:
-        debug_plot = config['debug-plot']
-
-    raw = mne.io.read_raw_fif(gradrem_path)
-    raw.load_data()
-    tmpdata = raw.get_data()
-
-    for t in range(tmpdata.shape[0]):
-        raw[t,:1790] = 0
-
-    raw = raw.copy().resample(250, npad='auto', verbose='error')
+    orig_srate = raw.info['sfreq']
+    raw = raw.resample(256, verbose='error')
     print("Srate: %s" % raw.info['sfreq'])
-    heartdata = remove_bcg.sort_heart_components(raw)
+
+    events = mne.find_events(raw)
+    print(events)
+    raw = raw.resample(raw.info['sfreq'], verbose='error')
+
+    events = mne.find_events(raw)
+    print(events)
+
+    heartdata = bcg_utils.sort_heart_components(raw)
+
+    events = mne.find_events(raw)
+    print(events)
 
     """
     run_bcg_denoise.py
@@ -69,13 +73,13 @@ def run(args=None, config=None):
     for i in np.arange(0,heartdata.shape[1], chunk_size):
         log.info("On chunk starting from %s" % str(i))
         if i+chunk_size < heartdata.shape[1]:
-            peak_inds = remove_bcg.get_heartbeat_peaks(heartdata[0,i:i+chunk_size]) + i
+            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:i+chunk_size]) + i
             new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
             new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
             new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
             all_peak_inds = new_peak_inds 
         else:
-            peak_inds = remove_bcg.get_heartbeat_peaks(heartdata[0,i:]) + i
+            peak_inds = bcg_utils.get_heartbeat_peaks(heartdata[0,i:]) + i
             new_peak_inds = np.zeros(all_peak_inds.shape[0] + peak_inds.shape[0])
             new_peak_inds[0:all_peak_inds.shape[0]] = all_peak_inds[0:]
             new_peak_inds[all_peak_inds.shape[0]:] = peak_inds[0:]
@@ -85,7 +89,7 @@ def run(args=None, config=None):
     peak_arr = np.zeros(heartdata.shape[1])
     peak_arr[all_peak_inds] = 1
 
-    peak_inds = remove_bcg.remove_bad_peaks(heartdata[0,:], all_peak_inds)
+    peak_inds = bcg_utils.remove_bad_peaks(heartdata[0,:], all_peak_inds)
     print(len(peak_inds))
 
     plt.figure()
@@ -102,23 +106,36 @@ def run(args=None, config=None):
                 plt.axvline(x=i, color='black')
             plt.show()
 
-    mean_hr, hr_ts = remove_bcg.get_heartrate(raw,heartdata[0,:],peak_inds)
+    mean_hr, hr_ts = bcg_utils.get_heartrate(raw,heartdata[0,:],peak_inds)
     print("HR:")
     print(mean_hr)
 
-    bcg_epochs, bcg_inds = remove_bcg.epoch_channel_heartbeats(
+
+    bcg_epochs, bcg_inds = bcg_utils.epoch_channel_heartbeats(
             raw.get_data(), int(mean_hr*0.95), peak_inds, raw.info['sfreq'])
 
+    events = mne.find_events(raw)
+    print(events)
+
+    log.info(
+        "In this figure, a recurring pattern (the BCG artifact) should be visible.\n" +
+        "If not, either gradient artifact removal failed, or the BCG peak widths must\n" +
+        "be changed."
+    )
     plt.figure()
     print(bcg_epochs.shape)
     plt.imshow(np.squeeze(bcg_epochs[3,:,:]))
     plt.clim(-0.0001, 0.0001)
     plt.show()
 
-    shifted_epochs, shifted_inds = remove_bcg.align_heartbeat_peaks(
+
+    # Setup for reading the raw data
+    events = mne.find_events(raw)
+
+    shifted_epochs, shifted_inds = bcg_utils.align_heartbeat_peaks(
             bcg_epochs, bcg_inds)
 
-    subbed_raw = remove_bcg.subtract_heartbeat_artifacts(
+    subbed_raw = bcg_utils.subtract_heartbeat_artifacts(
            raw.get_data(), shifted_epochs, shifted_inds)
 
     new_raw = helpers.create_raw_mne(subbed_raw, raw.ch_names, ['eeg' for _ in range(len(raw.ch_names))],
@@ -129,6 +146,79 @@ def run(args=None, config=None):
         'bcgrem_gradrem_' + str(int(time.time())) + gradrem_path.split('/')[-1].split('.')[0] + '.fif'
     )
 
-    new_raw.save(fname)
+    # Setup for reading the raw data
+    events = mne.find_events(raw)
 
+    raw[0:63,:] = subbed_raw[0:63,:]
+
+    raw.resample(512, npad='auto', verbose='error')
+    raw.save(fname)
+
+    if display_ica_components:
+        n_components = 60
+        log.info("Displaying ICA components post-clean...")
+        raw.filter(1,250)
+        ica = ICA(n_components=n_components, method='fastica', random_state=23)
+
+        ica.fit(raw,decim=4)
+        ica.plot_components(picks=np.arange(0,60), cmap='jet')
+
+        # Setup for reading the raw data
+        events = mne.find_events(raw)
+
+        # Construct Epochs
+        icaraw = ica.get_sources(raw)
+        event_id, tmin, tmax = 11, -1., 3.
+        baseline = (None, 0)
+        epochs = mne.Epochs(icaraw, events, event_id, tmin, tmax,
+                            baseline=baseline,
+                            preload=True)
+
+        freqs = np.logspace(*np.log10([1, 100]), num=100)
+        n_cycles = freqs / 2.  # different number of cycle per frequency
+        power, itc = tfr_morlet(epochs, freqs=freqs, n_cycles=n_cycles, use_fft=True, picks=list(range(n_components)))
+        power.plot(list(range(n_components)), baseline=(-0.5, 0), mode='percent',yscale='linear', cmap='jet', vmin=-5, vmax=5)
+
+    return raw
+
+
+def run(args=None, config=None):
+    if not config:
+        parser = AnalysisParser('config')
+        args = parser.parse_analysis_args(args)
+        config = args.config
+
+    montage_path = config['montage_path']
+    gradrem_path = config['raw_gradrem_fif']
+    output = config['output']
+    display_ica_components = config['display_ica_components']
+
+    debug_plot = False
+    if 'debug-plot' in config:
+        debug_plot = config['debug-plot']
+
+    bcg_peak_widths = list(range(25,45))
+    if 'bcg_peak_widths' in config:
+        bcg_peak_widths = config['bcg_peak_widths']
+
+    raw = mne.io.read_raw_fif(gradrem_path)
+    raw.load_data()
+    tmpdata = raw.get_data()
+    events = mne.find_events(raw)
+    print(events)
+
+    for t in range(tmpdata.shape[0]):
+        raw[t,:1790] = 0
+
+    remove_bcg(
+        raw,
+        montage_path,
+        output=output,
+        debug_plot=debug_plot,
+        bcg_peak_widths=bcg_peak_widths,
+        display_ica_components=display_ica_components
+    )
+
+    log.info("Interactive mode started...")
+    code.interact(local=locals())
 

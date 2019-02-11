@@ -37,12 +37,12 @@ def sort_heart_components(raw):
 
     return srcdata[sort_skews_desc,:]
 
-def get_heartbeat_peaks(peak_signal, peak_widths=list(range(25,50))):
+def get_heartbeat_peaks(peak_signal, peak_widths=list(range(25,45))):
     peak_inds = signal.find_peaks_cwt(peak_signal, peak_widths)
     return peak_inds
 
 def remove_bad_peaks(heartdata, peak_inds):
-    epochl = 150 
+    epochl = 150
     halfepochl = np.int(epochl/2)
     
     bcg_epochs = np.zeros([peak_inds.shape[0], epochl])
@@ -58,9 +58,6 @@ def remove_bad_peaks(heartdata, peak_inds):
     badinds = np.where(zcorrs < -4.3)   
     peak_inds = np.delete(peak_inds, badinds)
 
-    # Filter out peaks that are too close to each other
-
-    
     return peak_inds
 
 def get_heartrate(raw, heartdata, peak_inds):

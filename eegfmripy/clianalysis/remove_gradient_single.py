@@ -111,32 +111,14 @@ def isolate_frequencies(data, midfreq, srate):
 
 # define function for finding start of TS given number of dummies (for aligning with FMRI)
 
-def run(args=None, config=None):
-    if not config:
-        parser = AnalysisParser('config')
-        args = parser.parse_analysis_args(args)
-        config = args.config
 
-    montage_path = config['montage_path']
-    raw_vhdr = config['raw_vhdr']
-    alignment_trigger_name = config['alignment_trigger_name']
-    slice_gradient_similarity_correlation = config[
-        'slice_gradient_similarity_correlation'
-    ]
-    output = config['output']
-
-    debug_plot = False
-    if 'debug-plot' in config:
-        debug_plot = config['debug-plot']
-
-    root, fname = os.path.split(montage_path)
-
-    montage = mne.channels.read_montage(montage_path)
-    raw = mne.io.read_raw_brainvision(
-        raw_vhdr,
-        montage=montage,
-        eog=['ECG','ECG1']
-    )
+def remove_gradient(
+        raw,
+        alignment_trigger_name=None,
+        slice_gradient_similarity_correlation=0.9,
+        output=None,
+        debug_plot=False
+    ):
 
     tmpgraddata = raw.get_data()
     events = mne.find_events(raw)
@@ -156,7 +138,8 @@ def run(args=None, config=None):
     graddata = np.zeros((tmpgraddata.shape[0], tmpgraddata.shape[1]-alignment_latency))
     for t in range(tmpgraddata.shape[0]):
         graddata[t, :] = tmpgraddata[t, alignment_latency:]
-
+    events = mne.find_events(raw)
+    print(events)
     slice_gap = get_slicegap(graddata[3,:])
     slice_epochs, slice_inds = get_slicepochs(graddata[0,:], slice_gap)
 
@@ -164,6 +147,8 @@ def run(args=None, config=None):
         slice_epochs,
         corrthresh=slice_gradient_similarity_correlation
     )
+    events = mne.find_events(raw)
+    print(events)
 
     error_msg = \
         'ERROR: Cannot find any gradients that are sufficiently similar to each other.' +\
@@ -202,6 +187,8 @@ def run(args=None, config=None):
 
         if debug_plot:
             plt.show()
+        events = mne.find_events(raw)
+        print(events)
 
     finish_same_line()
     '''
@@ -217,12 +204,13 @@ def run(args=None, config=None):
     for t in range(tmpgraddata.shape[0]):
         newgraddata[t, :alignment_latency] = tmpgraddata[t,:alignment_latency]
         newgraddata[t, alignment_latency:] = graddata[t,:]
-
-    new_raw = helpers.create_raw_mne(newgraddata, raw.ch_names, ['eeg' for _ in range(len(raw.ch_names))],
-              mne.channels.read_montage(montage_path), sfreq=raw.info['sfreq']
-    )
-    new_raw.save(fname)
-
+    events = mne.find_events(raw)
+    print(events)
+    raw.load_data()
+    raw[0:64,:] = newgraddata[0:64, :]
+    raw.save(fname)
+    events = mne.find_events(raw)
+    print(events)
     plt.figure()
     fft = np.abs(np.fft.fft(newgraddata[3,50000:newgraddata.shape[1]-50000]))
     plt.plot(fft)
@@ -233,4 +221,40 @@ def run(args=None, config=None):
 
     log.info("Close figures to end analysis.")
     plt.show()
+    return raw
 
+
+def run(args=None, config=None):
+    if not config:
+        parser = AnalysisParser('config')
+        args = parser.parse_analysis_args(args)
+        config = args.config
+
+    montage_path = config['montage_path']
+    raw_vhdr = config['raw_vhdr']
+    alignment_trigger_name = config['alignment_trigger_name']
+    slice_gradient_similarity_correlation = config[
+        'slice_gradient_similarity_correlation'
+    ]
+    output = config['output']
+
+    debug_plot = False
+    if 'debug-plot' in config:
+        debug_plot = config['debug-plot']
+
+    root, fname = os.path.split(montage_path)
+
+    montage = mne.channels.read_montage(montage_path)
+    raw = mne.io.read_raw_brainvision(
+        raw_vhdr,
+        montage=montage,
+        eog=['ECG','ECG1']
+    )
+
+    remove_gradient(
+        raw,
+        alignment_trigger_name=alignment_trigger_name,
+        slice_gradient_similarity_correlation=slice_gradient_similarity_correlation,
+        output=output,
+        debug_plot=debug_plot
+    )
