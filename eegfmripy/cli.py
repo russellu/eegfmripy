@@ -70,8 +70,17 @@ def run_analysis(analysis, args):
 
 
 def cli(args=sys.argv[1:]):
+	all_analysistypes = [
+		os.path.splitext(p)[0] for p in os.listdir(ANALYSISTYPES_DIR)
+		if p.endswith('.py') if p != '__init__.py'
+	]
+	str_allanalysis = ' '.join(
+		["({}) {}".format(str(i+1), val) for i, val in enumerate(all_analysistypes)]
+	)
+
 	parser = ArgumentParser()
-	parser.add_argument('analysis', nargs='*', help="Analysis types to run.")
+	parser.add_argument('analysis', nargs='*',
+						help='''Analysis types to run, listed here: {}'''.format(str_allanalysis))
 	parser.add_argument('-l', '--list', action='store_true', default=False,
 						help="List available analysis types.")
 	parser.add_argument('-v', '--verbose', action='store_true', default=False,
@@ -82,11 +91,6 @@ def cli(args=sys.argv[1:]):
 		log.setLevel(logging.DEBUG)
 	else:
 		log.setLevel(logging.INFO)
-
-	all_analysistypes = [
-		os.path.splitext(p)[0] for p in os.listdir(ANALYSISTYPES_DIR)
-		if p.endswith('.py') if p != '__init__.py'
-	]
 
 	if args.list:
 		log.info('\n'.join(sorted(all_analysistypes)))
