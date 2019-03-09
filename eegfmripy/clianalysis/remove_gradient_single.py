@@ -76,26 +76,32 @@ def subtract_gradient(slice_epochs, slice_inds, corrmat_thresh, data_l, window_s
     return subbed_ts
 
 def isolate_frequencies_old(data,midfreq,fs):
-    spec1 = np.fft.fft(data) 
-    spec2 = np.zeros(spec1.shape,dtype=np.complex_)
-    spec2[0:] = spec1[0:] ; 
-    
-    length = data.shape[0]
-    binsz = fs/length 
-    lowCutIndex = int(midfreq/binsz)
-    spec1[1:lowCutIndex] = 0
-    spec2[lowCutIndex:] = 0
-
-    highpass = np.real(np.fft.ifft(spec1))
-    lowpass = np.real(np.fft.ifft(spec2))
+    print(data.shape)
+    with helpers.elapsed_timer() as elap:
+        spec1 = np.fft.fft(data) 
+        spec2 = np.zeros(spec1.shape,dtype=np.complex_)
+        spec2[0:] = spec1[0:] ; 
+        
+        length = data.shape[0]
+        binsz = fs/length 
+        lowCutIndex = int(midfreq/binsz)
+        spec1[1:lowCutIndex] = 0
+        spec2[lowCutIndex:] = 0
+        print(elap())
+    with helpers.elapsed_timer() as elap:
+        highpass = np.real(np.fft.ifft(spec1))
+        lowpass = np.real(np.fft.ifft(spec2))
+        print(elap())
     
     return highpass,lowpass 
 
 def isolate_frequencies(data, midfreq, srate):
     # Get frequency domain signal
-    freq_bins =  np.fft.fftfreq(data.shape[0], d=1/srate)
-    freq_signal = np.fft.fft(data, n=len(data))
-
+    with helpers.elapsed_timer() as elap:
+        freq_bins =  np.fft.fftfreq(data.shape[0], d=1/srate)
+        freq_signal = np.fft.fft(data, n=len(data))
+        print(elap())
+    print("here4")
     # Filter signal
     low_freq_signal = freq_signal.copy()
     high_freq_signal = freq_signal.copy()
@@ -104,8 +110,11 @@ def isolate_frequencies(data, midfreq, srate):
     low_freq_signal[(abs(freq_bins) > midfreq)] = 0
     low_freq_signal[freq_bins == 0] = zero_freq
 
-    highpass = np.fft.ifft(high_freq_signal, n=len(data)).real
-    lowpass = np.fft.ifft(low_freq_signal, n=len(data)).real
+    print("here5")
+    with helpers.elapsed_timer() as elap:
+        highpass = np.fft.ifft(high_freq_signal, n=len(data)).real
+        lowpass = np.fft.ifft(low_freq_signal, n=len(data)).real
+        print(elap())
 
     return highpass, lowpass
 
@@ -159,7 +168,10 @@ def remove_gradient(
     log.info("Epoching slices...total runs: {}".format(graddata.shape[0]))
     for i in np.arange(0,graddata.shape[0]):
         write_same_line(str(i+1) + "/{}".format(graddata.shape[0]))
-        highpass, lowpass = isolate_frequencies(graddata[i,:], 2, raw.info['sfreq'])
+        print("here")
+        with helpers.elapsed_timer() as elapsed:
+            highpass, lowpass = isolate_frequencies(graddata[i,:], 2, raw.info['sfreq'])
+            print(elapsed())
 
         if debug_plot_verbose:
             plt.figure()
@@ -167,17 +179,25 @@ def remove_gradient(
             plt.plot(fft)
             plt.title("FFT - High frequencies before gradient subtraction")
 
-        slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
+        print("here6")
+        with helpers.elapsed_timer() as elap:
+            slice_epochs, slice_inds = get_slicepochs(highpass, slice_gap)
+            print(elap())
 
         if debug_plot_verbose:
             plt.figure()
             log.info(len(slice_epochs))
             plt.imshow(slice_epochs[500:1500])
             plt.title("Gradient epochs (portion of total)")
-
-        slice_epochs = replace_bad_slices(slice_epochs, good_epoch_inds, bad_epoch_inds)
-        graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
-                corrmat_thresh, graddata.shape[1]) + lowpass
+        print("here1")
+        with helpers.elapsed_timer() as elap:
+            slice_epochs = replace_bad_slices(slice_epochs, good_epoch_inds, bad_epoch_inds)
+            print(elap())
+        print("here2")
+        with helpers.elapsed_timer() as elap:
+            graddata[i,:] = subtract_gradient(slice_epochs, slice_inds, 
+                    corrmat_thresh, graddata.shape[1]) + lowpass
+            print(elap())
 
         if debug_plot_verbose:
             plt.figure()
