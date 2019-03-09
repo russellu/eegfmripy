@@ -9,7 +9,7 @@ The package performs the following in sequential order:
 1. ballistocardigram artifact removal
 
 The following features may be added in the future:
-residual noise removal using ICA
+1. Residual noise removal using ICA
 1. EEG motion detection and censoring
 1. Source localization of cleaned scalp space signal
 1. Co-registration of source space with FMRI voxel space
