@@ -1,4 +1,7 @@
 # eegfmripy
+
+NOTE: This python code works, but it's sub-optimal for a number of reasons (Python-specific issues, and MNE-specific issues). We've implemented it in Matlab with much better results: https://github.com/gmierz/eegfmri-matlab
+
 Python code for denoising eeg data from eeg-fmri experiments, and fusing eeg-fmri data.
 
 A fully automatic pipeline for cleaning raw EEG data acquired inside the scanner.
