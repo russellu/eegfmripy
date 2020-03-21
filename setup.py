@@ -30,6 +30,7 @@ setup(
     packages=[
         'eegfmripy',
         'eegfmripy.clianalysis',
+        'eegfmripy.utils'
     ],
     include_package_data=True,
     install_requires=DEPS,
